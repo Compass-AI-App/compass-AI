@@ -1,0 +1,10 @@
+feature,daily_active_users,weekly_active_users,adoption_rate_pct,trend,last_updated
+slack_jira_sync,4200,8100,78,stable,2026-02-28
+github_jira_sync,1800,3400,33,growing,2026-02-28
+real_time_dashboard,890,1600,15,growing,2026-02-28
+custom_field_mapping,620,1100,11,stable,2026-02-28
+bulk_operations,340,580,6,declining,2026-02-28
+webhook_notifications,180,290,3,new,2026-02-28
+api_beta,0,0,0,not_launched,2026-02-28
+batch_export,0,0,0,not_launched,2026-02-28
+sso_login,0,0,0,not_launched,2026-02-28

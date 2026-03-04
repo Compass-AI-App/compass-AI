@@ -1,0 +1,223 @@
+"""Provider-agnostic LLM orchestrator.
+
+Routes LLM calls through a configurable provider (Anthropic direct, Compass Cloud,
+or BYOK), tracks token usage per-session, and returns responses in a unified format.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Generator
+
+
+@dataclass
+class TokenUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+    @property
+    def estimated_cost_usd(self) -> float:
+        return (self.input_tokens * 3.0 + self.output_tokens * 15.0) / 1_000_000
+
+    def record(self, input_t: int, output_t: int) -> None:
+        self.input_tokens += input_t
+        self.output_tokens += output_t
+
+    def to_dict(self) -> dict:
+        return {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total,
+            "estimated_cost_usd": round(self.estimated_cost_usd, 4),
+        }
+
+
+class LLMProvider(ABC):
+    """Abstract base for LLM providers."""
+
+    @abstractmethod
+    def complete(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> tuple[str, int, int]:
+        """Returns (response_text, input_tokens, output_tokens)."""
+        ...
+
+    def complete_stream(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> Generator[str, None, tuple[int, int]]:
+        """Streaming variant. Yields tokens, returns (input_tokens, output_tokens)."""
+        text, inp, out = self.complete(prompt, system, model, max_tokens)
+        yield text
+        return (inp, out)
+
+
+class AnthropicProvider(LLMProvider):
+    """Direct Anthropic API calls."""
+
+    DEFAULT_MODEL = "claude-sonnet-4-20250514"
+
+    def __init__(self, api_key: str | None = None):
+        from anthropic import Anthropic
+
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        if not key:
+            from dotenv import load_dotenv
+
+            load_dotenv()
+            key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not key:
+            raise ValueError("ANTHROPIC_API_KEY not set.")
+        self._client = Anthropic(api_key=key)
+
+    def complete(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> tuple[str, int, int]:
+        model = model or self.DEFAULT_MODEL
+        response = self._client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system or "You are Compass, an AI product discovery assistant.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text
+        inp = response.usage.input_tokens
+        out = response.usage.output_tokens
+        return text, inp, out
+
+    def complete_stream(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> Generator[str, None, tuple[int, int]]:
+        model = model or self.DEFAULT_MODEL
+        with self._client.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            system=system or "You are Compass, an AI product discovery assistant.",
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+            msg = stream.get_final_message()
+            return (msg.usage.input_tokens, msg.usage.output_tokens)
+
+
+class CompassCloudProvider(LLMProvider):
+    """Proxies calls through Compass Cloud API (auth + metering)."""
+
+    def __init__(self, cloud_url: str = "", auth_token: str = ""):
+        self.cloud_url = cloud_url or os.environ.get("COMPASS_CLOUD_URL", "https://api.compass.dev")
+        self.auth_token = auth_token or os.environ.get("COMPASS_AUTH_TOKEN", "")
+
+    def complete(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> tuple[str, int, int]:
+        raise NotImplementedError(
+            "Compass Cloud provider is not yet implemented. "
+            "Use COMPASS_LLM_PROVIDER=anthropic with your own API key."
+        )
+
+
+class Orchestrator:
+    """Central LLM orchestrator — manages provider, tracks usage."""
+
+    def __init__(self, provider: LLMProvider | None = None, default_model: str = ""):
+        self.provider = provider or _create_default_provider()
+        self.default_model = default_model
+        self.usage = TokenUsage()
+
+    def ask(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> str:
+        text, inp, out = self.provider.complete(
+            prompt, system, model or self.default_model, max_tokens
+        )
+        self.usage.record(inp, out)
+        return text
+
+    def ask_json(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> dict | list:
+        full_prompt = prompt + "\n\nRespond with valid JSON only. No markdown fences, no explanation."
+        text = self.ask(full_prompt, system, model, max_tokens)
+
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.split("\n")
+            cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+
+        return json.loads(cleaned)
+
+    def ask_stream(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> Generator[str, None, None]:
+        gen = self.provider.complete_stream(
+            prompt, system, model or self.default_model, max_tokens
+        )
+        try:
+            while True:
+                yield next(gen)
+        except StopIteration as e:
+            if e.value:
+                inp, out = e.value
+                self.usage.record(inp, out)
+
+
+_instance: Orchestrator | None = None
+
+
+def get_orchestrator() -> Orchestrator:
+    """Get or create the global orchestrator singleton."""
+    global _instance
+    if _instance is None:
+        _instance = Orchestrator()
+    return _instance
+
+
+def reset_orchestrator() -> None:
+    global _instance
+    _instance = None
+
+
+def _create_default_provider() -> LLMProvider:
+    provider_name = os.environ.get("COMPASS_LLM_PROVIDER", "anthropic").lower()
+    if provider_name == "cloud":
+        return CompassCloudProvider()
+    return AnthropicProvider()

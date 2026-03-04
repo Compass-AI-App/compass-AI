@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+.env
+.compass/
+*.db
+
+.venv/
+venv/
+env/
+engine/.venv/
+engine/*.egg-info/
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+.DS_Store
+Thumbs.db
+
+# ChromaDB local storage
+chroma_data/
+
+# Node / Electron
+node_modules/
+app/node_modules/
+app/dist/
+app/dist-electron/
+app/out/
+*.dmg
+
+# IDE
+.idea/
+*.swp
+*.swo

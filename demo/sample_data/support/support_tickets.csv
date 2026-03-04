@@ -1,0 +1,24 @@
+id,title,description,category,priority,status,created_date,customer_tier
+T-1001,Sync stopped working for 4 hours,Our Slack-Jira sync completely stopped. No errors shown. Found out when team noticed stale data.,sync_failure,high,resolved,2026-01-15,enterprise
+T-1002,Slow sync — taking 30+ seconds,Used to be instant. Now our Jira updates take 30 seconds to appear in Slack.,sync_latency,high,open,2026-01-18,growth
+T-1003,Need to export all sync history,Compliance audit requires full export of sync logs. No way to do this in the UI.,feature_request,medium,open,2026-01-20,enterprise
+T-1004,Cryptic error: SYNC_ERR_4502,Get this error when setting up GitHub sync. No idea what it means.,error_message,medium,resolved,2026-01-22,smb
+T-1005,SSO support needed for Okta,Security team won't approve renewal without SSO. This is urgent.,feature_request,high,open,2026-01-25,enterprise
+T-1006,Sync lag increasing over time,Started at 2 seconds now regularly 5-10 seconds. Getting worse each month.,sync_latency,high,open,2026-01-28,growth
+T-1007,Lost data during sync failure,Sync failed silently and some Jira tickets didn't make it to Slack. Had to manually reconcile.,sync_failure,critical,resolved,2026-02-01,enterprise
+T-1008,Onboarding wizard is confusing,New team member spent 45 minutes trying to set up first sync. Field mapping step is unclear.,ux_issue,medium,open,2026-02-03,smb
+T-1009,Need webhook when sync fails,Want to be notified immediately when a sync fails rather than discovering it hours later.,feature_request,high,open,2026-02-05,enterprise
+T-1010,Duplicate records after sync restart,After a sync failure and restart we got duplicate entries in Jira.,sync_failure,high,resolved,2026-02-08,growth
+T-1011,API access — when is it coming?,Our engineering team needs programmatic access. Was promised in Q4 last year.,feature_request,medium,open,2026-02-10,growth
+T-1012,Sync latency 15+ seconds for GitHub,GitHub to Jira sync is extremely slow. Much worse than Slack sync.,sync_latency,high,open,2026-02-12,enterprise
+T-1013,Custom field mapping broke after update,Last update changed something. Our custom field mappings stopped working.,sync_failure,high,resolved,2026-02-14,enterprise
+T-1014,Need batch export for compliance,Quarterly compliance requirement. Need to export full sync history as CSV.,feature_request,medium,open,2026-02-16,enterprise
+T-1015,Error messages not helpful,When sync fails the error says "An error occurred." Need actionable info.,error_message,medium,open,2026-02-18,smb
+T-1016,Sync failures increasing,We used to have maybe 1 failure a month. Now it's weekly. Something is degrading.,sync_failure,high,open,2026-02-20,growth
+T-1017,Pricing too high for small teams,20 connections shouldn't cost $500/month. Zapier is cheaper per connection.,pricing,low,open,2026-02-22,smb
+T-1018,Need real-time sync health dashboard,Can't tell if syncs are working until something breaks. Need proactive monitoring.,feature_request,high,open,2026-02-24,enterprise
+T-1019,SSO blocking our procurement,Legal/security will not process renewal PO without SSO. Deadline is April 1.,feature_request,critical,open,2026-02-26,enterprise
+T-1020,Sync dropping messages under load,When we have 50+ updates in a minute some get dropped. No retries.,sync_failure,high,open,2026-02-28,enterprise
+T-1021,Would pay more for API access,Happy customer but our devs need API. Will increase spend if available.,feature_request,medium,open,2026-02-28,growth
+T-1022,Onboarding: took 3 tries to succeed,Two team members gave up on first attempt. Third time worked after I walked them through it.,ux_issue,medium,open,2026-02-28,smb
+T-1023,Sync latency now 8 seconds average,Monitoring our sync. Average went from 2s to 8s over 6 months. Unacceptable.,sync_latency,high,open,2026-02-28,enterprise

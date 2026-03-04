@@ -1,0 +1,23 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+contextBridge.exposeInMainWorld("compass", {
+  engine: {
+    call: (endpoint: string, body?: unknown) =>
+      ipcRenderer.invoke("engine-call", endpoint, body),
+    health: () => ipcRenderer.invoke("engine-health"),
+    stream: (endpoint: string, body?: unknown) =>
+      ipcRenderer.invoke("engine-stream", endpoint, body),
+    onStreamData: (callback: (data: string) => void) => {
+      const handler = (_event: unknown, data: string) => callback(data);
+      ipcRenderer.on("engine-stream-data", handler);
+      return () => ipcRenderer.removeListener("engine-stream-data", handler);
+    },
+  },
+  app: {
+    selectDirectory: () => ipcRenderer.invoke("select-directory"),
+    selectFile: (filters?: { name: string; extensions: string[] }[]) =>
+      ipcRenderer.invoke("select-file", filters),
+    saveFile: (defaultName: string, content: string) =>
+      ipcRenderer.invoke("save-file", defaultName, content),
+  },
+});
