@@ -44,8 +44,8 @@ def get_compass_dir(base: Path | None = None) -> Path:
     """Get the .compass directory, creating if needed."""
     base = base or Path.cwd()
     compass_dir = base / COMPASS_DIR
-    compass_dir.mkdir(exist_ok=True)
-    (compass_dir / OUTPUT_DIR).mkdir(exist_ok=True)
+    compass_dir.mkdir(parents=True, exist_ok=True)
+    (compass_dir / OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     return compass_dir
 
 

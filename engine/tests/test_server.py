@@ -156,20 +156,18 @@ class TestConfigure:
         finally:
             os.environ.pop("ANTHROPIC_API_KEY", None)
 
-    def test_configure_missing_key(self, client):
-        # Remove any existing key
-        old_key = os.environ.pop("ANTHROPIC_API_KEY", None)
-        try:
-            res = client.post("/configure", json={
-                "api_key": "",
-                "model": "",
-                "provider": "anthropic",
-            })
-            # Should fail because no API key
-            assert res.status_code == 400
-        finally:
-            if old_key:
-                os.environ["ANTHROPIC_API_KEY"] = old_key
+    def test_configure_missing_key(self, client, monkeypatch):
+        # Remove any existing key and prevent dotenv from reloading it
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        import dotenv
+        monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **kw: None)
+        res = client.post("/configure", json={
+            "api_key": "",
+            "model": "",
+            "provider": "anthropic",
+        })
+        # Should fail because no API key
+        assert res.status_code == 400
 
 
 class TestSearch:
