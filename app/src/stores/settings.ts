@@ -14,10 +14,12 @@ interface SettingsState {
   setTokenUsage: (u: { input: number; output: number; total: number; cost: string }) => void;
   loadSettings: () => void;
   saveSettings: () => void;
+  pushToEngine: () => Promise<void>;
   fetchUsage: () => Promise<void>;
 }
 
 const SETTINGS_KEY = "compass-settings";
+const APIKEY_KEY = "compass-api-key";
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   provider: "compass",
@@ -28,14 +30,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setProvider: (provider) => {
     set({ provider });
     get().saveSettings();
+    get().pushToEngine();
   },
   setApiKey: (apiKey) => {
     set({ apiKey });
     get().saveSettings();
+    get().pushToEngine();
   },
   setModel: (model) => {
     set({ model });
     get().saveSettings();
+    get().pushToEngine();
   },
   setTokenUsage: (tokenUsage) => set({ tokenUsage }),
 
@@ -49,14 +54,40 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           model: data.model || "claude-sonnet-4-20250514",
         });
       }
+      // Load API key separately (persisted for BYOK)
+      const savedKey = localStorage.getItem(APIKEY_KEY);
+      if (savedKey) {
+        set({ apiKey: savedKey });
+      }
     } catch {
       // ignore
     }
   },
 
   saveSettings: () => {
-    const { provider, model } = get();
+    const { provider, model, apiKey } = get();
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ provider, model }));
+    // Persist API key when using BYOK
+    if (provider === "byok" && apiKey) {
+      localStorage.setItem(APIKEY_KEY, apiKey);
+    }
+  },
+
+  pushToEngine: async () => {
+    const { provider, apiKey, model } = get();
+    try {
+      await window.compass?.engine.call("/configure", {
+        method: "POST",
+        body: JSON.stringify({
+          api_key: provider === "byok" ? apiKey : "",
+          model,
+          provider: provider === "byok" ? "anthropic" : "cloud",
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch {
+      // Engine may not be running yet — ignore silently
+    }
   },
 
   fetchUsage: async () => {
