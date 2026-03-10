@@ -100,6 +100,7 @@ export default function OnboardingPage() {
     setWorkspace(workspacePath, productName, productDesc);
     if (providerChoice === "taskforce") {
       setProvider("taskforce");
+      if (apiKey) setSettingsApiKey(apiKey);
     } else if (apiKey) {
       setProvider("byok");
       setSettingsApiKey(apiKey);
@@ -292,10 +293,29 @@ export default function OnboardingPage() {
               )}
 
               {providerChoice === "taskforce" && (
-                <div className="px-3 py-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                  <p className="text-sm text-green-400">
-                    Taskforce is configured via engine environment. No API key needed here.
-                  </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-neutral-400 mb-1">
+                      Taskforce API key
+                    </label>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Your Taskforce key..."
+                      className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
+                    />
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Get one from your team's Taskforce admin or the Hendrix GenAI portal.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
+                    <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-neutral-400">
+                      Your key is encrypted with your OS keychain and stored locally.
+                      It is sent to Spotify's Hendrix gateway — never to external servers.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -323,10 +343,10 @@ export default function OnboardingPage() {
               </button>
               <button
                 onClick={() => setStep(4)}
-                disabled={providerChoice === "byok" && !apiKey}
+                disabled={!apiKey}
                 className={clsx(
                   "inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors",
-                  providerChoice === "taskforce" || apiKey
+                  apiKey
                     ? "bg-compass-accent hover:bg-compass-accent-hover text-white"
                     : "bg-compass-card text-neutral-600 cursor-not-allowed"
                 )}

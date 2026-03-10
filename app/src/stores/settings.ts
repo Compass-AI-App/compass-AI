@@ -75,8 +75,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: () => {
     const { provider, model, apiKey } = get();
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ provider, model }));
-    // Persist API key to OS keychain when using BYOK
-    if (provider === "byok" && apiKey) {
+    // Persist API key to OS keychain when using BYOK or Taskforce
+    if ((provider === "byok" || provider === "taskforce") && apiKey) {
       window.compass?.secrets.store(SECRET_KEY_NAME, apiKey);
     }
   },
@@ -87,7 +87,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       await window.compass?.engine.call("/configure", {
         method: "POST",
         body: JSON.stringify({
-          api_key: provider === "byok" ? apiKey : "",
+          api_key: provider === "byok" || provider === "taskforce" ? apiKey : "",
           model,
           provider: provider === "taskforce" ? "taskforce" : provider === "byok" ? "anthropic" : "cloud",
         }),
