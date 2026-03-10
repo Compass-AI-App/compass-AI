@@ -280,6 +280,10 @@ def discover():
     cache = [opp.model_dump() for opp in opportunities]
     (compass_dir / "opportunities_cache.json").write_text(json.dumps(cache, indent=2, default=str))
 
+    # Record in history
+    from compass.engine.history import record_discovery
+    record_discovery(compass_dir, opportunities, conflict_report)
+
 
 # --- specify ---
 
@@ -627,6 +631,39 @@ def _show_health(compass_dir: Path):
         table.add_row(source_name, source_type, str(count), age_str, status_str)
 
     console.print(table)
+
+
+# --- history ---
+
+@app.command()
+def history():
+    """Show discovery history — how opportunities and conflicts evolved over time."""
+    from compass.engine.history import get_history_summary
+
+    compass_dir = get_compass_dir()
+    summary = get_history_summary(compass_dir)
+
+    if summary.get("total_runs", 0) == 0:
+        console.print("[dim]No discovery history yet. Run: compass discover[/dim]")
+        return
+
+    console.print(f"\n[bold]Discovery History[/bold]")
+    console.print(f"[dim]Total runs: {summary['total_runs']}  |  First: {summary.get('first_run', 'N/A')[:10]}  |  Last: {summary.get('last_run', 'N/A')[:10]}[/dim]")
+    console.print(f"[dim]Unique opportunities: {summary.get('total_unique_opportunities', 0)}  |  Unique conflicts: {summary.get('total_unique_conflicts', 0)}[/dim]\n")
+
+    recurring = summary.get("recurring_opportunities", {})
+    if recurring:
+        console.print("[bold]Recurring Opportunities[/bold] (appeared in 2+ runs)")
+        for title, count in sorted(recurring.items(), key=lambda x: -x[1]):
+            console.print(f"  [green]↻[/green] {title} — appeared {count}x")
+        console.print()
+
+    persistent = summary.get("persistent_conflicts", {})
+    if persistent:
+        console.print("[bold]Persistent Conflicts[/bold] (detected in 2+ runs)")
+        for title, count in sorted(persistent.items(), key=lambda x: -x[1]):
+            console.print(f"  [red]⚠[/red] {title} — detected {count}x")
+        console.print()
 
 
 # --- feedback ---
