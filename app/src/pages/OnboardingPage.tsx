@@ -7,6 +7,7 @@ import {
   Link2,
   Check,
   Loader2,
+  Shield,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -263,21 +264,30 @@ export default function OnboardingPage() {
               </div>
 
               {providerChoice === "byok" && (
-                <div>
-                  <label className="block text-sm text-neutral-400 mb-1">
-                    Anthropic API key
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-ant-..."
-                    className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
-                  />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Get one at{" "}
-                    <span className="text-compass-accent">console.anthropic.com</span>
-                  </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-neutral-400 mb-1">
+                      Anthropic API key
+                    </label>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="sk-ant-..."
+                      className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
+                    />
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Get one at{" "}
+                      <span className="text-compass-accent">console.anthropic.com</span>
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
+                    <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-neutral-400">
+                      Your key is encrypted with your OS keychain and stored locally.
+                      It is sent directly to the Anthropic API — Compass never sees or transmits it elsewhere.
+                    </p>
+                  </div>
                 </div>
               )}
 

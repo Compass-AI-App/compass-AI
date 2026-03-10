@@ -20,4 +20,10 @@ contextBridge.exposeInMainWorld("compass", {
     saveFile: (defaultName: string, content: string) =>
       ipcRenderer.invoke("save-file", defaultName, content),
   },
+  secrets: {
+    store: (key: string, value: string) =>
+      ipcRenderer.invoke("secrets-store", key, value),
+    load: (key: string) => ipcRenderer.invoke("secrets-load", key),
+    delete: (key: string) => ipcRenderer.invoke("secrets-delete", key),
+  },
 });

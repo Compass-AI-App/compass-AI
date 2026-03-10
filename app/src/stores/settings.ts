@@ -12,14 +12,14 @@ interface SettingsState {
   setApiKey: (k: string) => void;
   setModel: (m: string) => void;
   setTokenUsage: (u: { input: number; output: number; total: number; cost: string }) => void;
-  loadSettings: () => void;
+  loadSettings: () => Promise<void>;
   saveSettings: () => void;
   pushToEngine: () => Promise<void>;
   fetchUsage: () => Promise<void>;
 }
 
 const SETTINGS_KEY = "compass-settings";
-const APIKEY_KEY = "compass-api-key";
+const SECRET_KEY_NAME = "anthropic-api-key";
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   provider: "compass",
@@ -44,7 +44,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setTokenUsage: (tokenUsage) => set({ tokenUsage }),
 
-  loadSettings: () => {
+  loadSettings: async () => {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       if (raw) {
@@ -54,10 +54,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           model: data.model || "claude-sonnet-4-20250514",
         });
       }
-      // Load API key separately (persisted for BYOK)
-      const savedKey = localStorage.getItem(APIKEY_KEY);
+      // Load API key from OS keychain via safeStorage
+      const savedKey = await window.compass?.secrets.load(SECRET_KEY_NAME);
       if (savedKey) {
         set({ apiKey: savedKey });
+      } else {
+        // Migrate from localStorage if present (one-time migration)
+        const legacyKey = localStorage.getItem("compass-api-key");
+        if (legacyKey) {
+          set({ apiKey: legacyKey });
+          await window.compass?.secrets.store(SECRET_KEY_NAME, legacyKey);
+          localStorage.removeItem("compass-api-key");
+        }
       }
     } catch {
       // ignore
@@ -67,9 +75,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: () => {
     const { provider, model, apiKey } = get();
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ provider, model }));
-    // Persist API key when using BYOK
+    // Persist API key to OS keychain when using BYOK
     if (provider === "byok" && apiKey) {
-      localStorage.setItem(APIKEY_KEY, apiKey);
+      window.compass?.secrets.store(SECRET_KEY_NAME, apiKey);
     }
   },
 
