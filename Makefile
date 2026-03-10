@@ -1,4 +1,4 @@
-.PHONY: setup dev engine demo clean build-mac
+.PHONY: setup dev engine demo clean build-mac build-win build-linux build-all
 
 setup: setup-engine setup-app
 
@@ -19,6 +19,15 @@ demo:
 
 build-mac: setup
 	cd app && npm run build:mac
+
+build-win: setup
+	cd app && npm run build:win
+
+build-linux: setup
+	cd app && npm run build:linux
+
+build-all: setup
+	cd app && npm run build:all
 
 clean:
 	rm -rf engine/.venv engine/*.egg-info

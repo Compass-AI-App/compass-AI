@@ -29,22 +29,28 @@ function getEngineDir(): string {
 
 function findPython(): string {
   const engineDir = getEngineDir();
+  const isWin = process.platform === "win32";
 
   // In development, prefer the local venv
   if (!isPackaged) {
-    const venvPython = path.join(engineDir, ".venv/bin/python");
-    if (existsSync(venvPython)) return venvPython;
+    if (isWin) {
+      const venvPythonWin = path.join(engineDir, ".venv\\Scripts\\python.exe");
+      if (existsSync(venvPythonWin)) return venvPythonWin;
+    } else {
+      const venvPython = path.join(engineDir, ".venv/bin/python");
+      if (existsSync(venvPython)) return venvPython;
 
-    const venvPython3 = path.join(engineDir, ".venv/bin/python3");
-    if (existsSync(venvPython3)) return venvPython3;
+      const venvPython3 = path.join(engineDir, ".venv/bin/python3");
+      if (existsSync(venvPython3)) return venvPython3;
+    }
   }
 
   // Packaged app or fallback: use system Python
-  const candidates = ["python3", "python"];
+  const candidates = isWin ? ["python", "python3"] : ["python3", "python"];
   for (const c of candidates) {
     return c; // rely on PATH
   }
-  return "python3";
+  return isWin ? "python" : "python3";
 }
 
 function findFreePort(): Promise<number> {
