@@ -156,16 +156,22 @@ class ZendeskConnector(Connector):
         if not rows:
             return []
 
-        headers = [h.lower() for h in rows[0].keys()]
-        subject_col = self._find_col(headers, ["subject", "title", "summary"])
-        desc_col = self._find_col(headers, ["description", "body", "content"])
-        status_col = self._find_col(headers, ["status", "state"])
+        # Build a case-insensitive header mapping: lowered_name → original_name
+        original_headers = list(rows[0].keys())
+        header_map = {h.lower(): h for h in original_headers}
+        lowered = list(header_map.keys())
+
+        subject_col = self._find_col(lowered, ["subject", "title", "summary"])
+        status_col = self._find_col(lowered, ["status", "state"])
+
+        # Resolve back to original header names for dict access
+        subject_key = header_map[subject_col] if subject_col else None
+        status_key = header_map[status_col] if status_col else None
 
         summary_lines = []
         for row in rows[:MAX_TICKETS]:
-            values = list(row.values())
-            subject = values[headers.index(subject_col)] if subject_col else "Ticket"
-            status = values[headers.index(status_col)] if status_col else ""
+            subject = row.get(subject_key, "Ticket") if subject_key else "Ticket"
+            status = row.get(status_key, "") if status_key else ""
             status_str = f" [{status}]" if status else ""
             summary_lines.append(f"- {subject}{status_str}")
 

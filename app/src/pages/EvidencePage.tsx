@@ -23,7 +23,7 @@ const tabColors: Record<string, string> = {
 
 export default function EvidencePage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
-  const { items, loading, filter, searchQuery, setFilter, setSearchQuery, fetchEvidence } =
+  const { items, loading, error, filter, searchQuery, setFilter, setSearchQuery, fetchEvidence } =
     useEvidenceStore();
 
   useEffect(() => {
@@ -88,7 +88,17 @@ export default function EvidencePage() {
       </div>
 
       {/* Evidence list */}
-      {loading ? (
+      {error ? (
+        <div className="text-center py-12">
+          <p className="text-red-400 mb-2">{error}</p>
+          <button
+            onClick={() => workspacePath && fetchEvidence(workspacePath)}
+            className="text-sm text-compass-accent hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      ) : loading ? (
         <div className="text-center py-12 text-compass-muted">Loading evidence...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-compass-muted">

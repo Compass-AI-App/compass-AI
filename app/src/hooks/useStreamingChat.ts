@@ -88,9 +88,21 @@ export function useStreamingChat() {
           history,
         });
       } catch {
-        // If streaming fails, fall back to non-streaming
+        // If streaming fails, show error in assistant message
         store.setLoading(false);
         cleanup?.();
+        if (!accumulatedText) {
+          const state = useChatStore.getState();
+          const msgs = [...state.messages];
+          const idx = msgs.findIndex((m) => m.id === assistantId);
+          if (idx >= 0) {
+            msgs[idx] = {
+              ...msgs[idx],
+              content: "Failed to get a response. Please check that the engine is running and try again.",
+            };
+            useChatStore.setState({ messages: msgs });
+          }
+        }
       }
     },
     []

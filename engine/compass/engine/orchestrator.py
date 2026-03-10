@@ -7,10 +7,14 @@ or BYOK), tracks token usage per-session, and returns responses in a unified for
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Generator
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -164,17 +168,31 @@ class CompassCloudProvider(LLMProvider):
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read().decode())
-                return (
-                    data["content"],
-                    data.get("input_tokens", 0),
-                    data.get("output_tokens", 0),
-                )
-        except urllib.error.HTTPError as e:
-            body = e.read().decode() if e.fp else ""
-            raise RuntimeError(f"Compass Cloud error ({e.code}): {body}") from e
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=180) as resp:
+                    data = json.loads(resp.read().decode())
+                    return (
+                        data["content"],
+                        data.get("input_tokens", 0),
+                        data.get("output_tokens", 0),
+                    )
+            except urllib.error.HTTPError as e:
+                body = e.read().decode() if e.fp else ""
+                # Don't retry client errors (4xx)
+                if 400 <= e.code < 500:
+                    raise RuntimeError(f"Compass Cloud error ({e.code}): {body}") from e
+                last_error = RuntimeError(f"Compass Cloud error ({e.code}): {body}")
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                last_error = RuntimeError(f"Compass Cloud connection error: {e}")
+
+            if attempt < 2:
+                wait = 2 ** attempt
+                logger.warning("Compass Cloud request failed (attempt %d/3), retrying in %ds...", attempt + 1, wait)
+                time.sleep(wait)
+
+        raise last_error  # type: ignore[misc]
 
 
 class Orchestrator:
@@ -208,12 +226,48 @@ class Orchestrator:
         full_prompt = prompt + "\n\nRespond with valid JSON only. No markdown fences, no explanation."
         text = self.ask(full_prompt, system, model, max_tokens)
 
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        return _extract_json(text)
 
+
+def _extract_json(text: str) -> dict | list:
+    """Extract JSON from LLM output, handling markdown fences and trailing text."""
+    cleaned = text.strip()
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        # Remove opening fence line
+        lines = lines[1:]
+        # Remove closing fence if present
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    # Try direct parse first
+    try:
         return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find JSON object or array within the text
+    for start_char, end_char in [("{", "}"), ("[", "]")]:
+        start = cleaned.find(start_char)
+        if start == -1:
+            continue
+        # Find the matching closing bracket from the end
+        end = cleaned.rfind(end_char)
+        if end <= start:
+            continue
+        try:
+            return json.loads(cleaned[start : end + 1])
+        except json.JSONDecodeError:
+            continue
+
+    raise json.JSONDecodeError(
+        f"Could not extract valid JSON from LLM response (first 200 chars): {text[:200]}",
+        text,
+        0,
+    )
 
     def ask_stream(
         self,

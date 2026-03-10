@@ -10,8 +10,10 @@ export default function DiscoverPage() {
   const {
     opportunities,
     loading,
+    error,
     activeSpec,
     specLoading,
+    specError,
     runDiscover,
     generateSpec,
     setActiveSpec,
@@ -56,12 +58,32 @@ export default function DiscoverPage() {
         </button>
       </div>
 
+      {/* Error state */}
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4 mb-4">
+          <p className="text-red-400 text-sm">{error}</p>
+          <button
+            onClick={() => workspacePath && runDiscover(workspacePath)}
+            className="text-sm text-compass-accent hover:underline mt-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Spec error */}
+      {specError && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4 mb-4">
+          <p className="text-red-400 text-sm">{specError}</p>
+        </div>
+      )}
+
       {/* Opportunity list */}
       {loading ? (
         <div className="text-center py-12 text-compass-muted">
           Reconciling sources and synthesizing opportunities...
         </div>
-      ) : opportunities.length === 0 ? (
+      ) : opportunities.length === 0 && !error ? (
         <div className="text-center py-12 text-compass-muted">
           No opportunities yet. Click Discover to analyze your evidence.
         </div>

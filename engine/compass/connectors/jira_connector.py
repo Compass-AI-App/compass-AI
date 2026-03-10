@@ -170,7 +170,7 @@ class JiraConnector(Connector):
         """Normalize a Jira issue dict into a consistent format."""
         # Handle nested fields format (Jira Cloud API)
         fields = raw.get("fields", {})
-        if fields:
+        if fields and isinstance(fields, dict):
             comments_raw = fields.get("comment", {})
             comments = []
             if isinstance(comments_raw, dict):

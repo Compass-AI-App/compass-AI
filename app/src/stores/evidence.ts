@@ -4,6 +4,7 @@ import type { Evidence, SourceType } from "../types/engine";
 interface EvidenceState {
   items: Evidence[];
   loading: boolean;
+  error: string | null;
   filter: SourceType | null;
   searchQuery: string;
 
@@ -17,6 +18,7 @@ interface EvidenceState {
 export const useEvidenceStore = create<EvidenceState>((set) => ({
   items: [],
   loading: false,
+  error: null,
   filter: null,
   searchQuery: "",
 
@@ -26,7 +28,7 @@ export const useEvidenceStore = create<EvidenceState>((set) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
   fetchEvidence: async (workspacePath: string) => {
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const res = (await window.compass.engine.call("/evidence", {
         workspace_path: workspacePath,
@@ -34,9 +36,13 @@ export const useEvidenceStore = create<EvidenceState>((set) => ({
 
       if (res.status === "ok") {
         set({ items: res.items });
+      } else {
+        set({ error: "Engine returned an unexpected response." });
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
       console.error("Fetch evidence failed:", err);
+      set({ error: `Failed to load evidence: ${message}` });
     } finally {
       set({ loading: false });
     }
