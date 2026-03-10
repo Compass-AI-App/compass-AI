@@ -6,7 +6,8 @@ import { resetOnboarding } from "./OnboardingPage";
 
 const MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-  { id: "claude-haiku-3-5-20241022", label: "Claude Haiku 3.5" },
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
 ];
 
 export default function SettingsPage() {
@@ -44,13 +45,13 @@ export default function SettingsPage() {
       <Section icon={Cpu} title="LLM Provider">
         <div className="flex gap-3">
           <ProviderButton
-            label="Compass Cloud"
-            description="Managed by Compass (Free/Pro/Max)"
+            label="Compass"
+            description="AI included — no setup needed"
             active={provider === "compass"}
             onClick={() => setProvider("compass")}
           />
           <ProviderButton
-            label="BYOK"
+            label="Your API Key"
             description="Bring your own Anthropic key"
             active={provider === "byok"}
             onClick={() => setProvider("byok")}
