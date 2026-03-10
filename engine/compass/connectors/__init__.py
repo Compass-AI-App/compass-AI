@@ -10,6 +10,8 @@ from compass.connectors.jira_connector import JiraConnector
 from compass.connectors.slack_connector import SlackConnector
 from compass.connectors.linear_connector import LinearConnector
 from compass.connectors.notion_connector import NotionConnector
+from compass.connectors.confluence_connector import ConfluenceConnector
+from compass.connectors.zendesk_connector import ZendeskConnector
 
 CONNECTORS: dict[str, type[Connector]] = {
     "github": GitHubConnector,
@@ -24,6 +26,8 @@ CONNECTORS: dict[str, type[Connector]] = {
     "slack": SlackConnector,
     "linear": LinearConnector,
     "notion": NotionConnector,
+    "confluence": ConfluenceConnector,
+    "zendesk": ZendeskConnector,
 }
 
 
@@ -46,6 +50,8 @@ __all__ = [
     "SlackConnector",
     "LinearConnector",
     "NotionConnector",
+    "ConfluenceConnector",
+    "ZendeskConnector",
     "CONNECTORS",
     "get_connector",
 ]
