@@ -9,6 +9,7 @@ from compass.connectors.support import SupportConnector
 from compass.connectors.jira_connector import JiraConnector
 from compass.connectors.slack_connector import SlackConnector
 from compass.connectors.linear_connector import LinearConnector
+from compass.connectors.notion_connector import NotionConnector
 
 CONNECTORS: dict[str, type[Connector]] = {
     "github": GitHubConnector,
@@ -22,6 +23,7 @@ CONNECTORS: dict[str, type[Connector]] = {
     "jira": JiraConnector,
     "slack": SlackConnector,
     "linear": LinearConnector,
+    "notion": NotionConnector,
 }
 
 
@@ -43,6 +45,7 @@ __all__ = [
     "JiraConnector",
     "SlackConnector",
     "LinearConnector",
+    "NotionConnector",
     "CONNECTORS",
     "get_connector",
 ]
