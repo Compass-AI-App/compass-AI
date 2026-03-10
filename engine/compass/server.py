@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from compass.config import ProductConfig, SourceConfig, save_config, load_config, get_compass_dir, get_output_dir
 from compass.connectors import get_connector
 from compass.engine.knowledge_graph import KnowledgeGraph
-from compass.engine.orchestrator import get_orchestrator
+from compass.engine.orchestrator import get_orchestrator, configure_orchestrator
 from compass.engine.reconciler import Reconciler
 from compass.engine.discoverer import Discoverer
 from compass.engine.specifier import Specifier
@@ -92,6 +92,12 @@ class SearchRequest(BaseModel):
     limit: int = 20
 
 
+class ConfigureRequest(BaseModel):
+    api_key: str = ""
+    model: str = ""
+    provider: str = "anthropic"
+
+
 # ---------- Health ----------
 
 @app.get("/health")
@@ -111,6 +117,26 @@ def usage():
         "total_tokens": u.total,
         "total_cost_estimate": f"${u.estimated_cost_usd:.4f}",
     }
+
+
+# ---------- Configure ----------
+
+@app.post("/configure")
+def configure(req: ConfigureRequest):
+    """Reconfigure the LLM provider at runtime (e.g. from the Settings page)."""
+    try:
+        orch = configure_orchestrator(
+            api_key=req.api_key,
+            model=req.model,
+            provider=req.provider,
+        )
+        return {
+            "status": "ok",
+            "provider": req.provider,
+            "model": req.model or orch.default_model,
+        }
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ---------- Init ----------

@@ -211,6 +211,31 @@ def get_orchestrator() -> Orchestrator:
     return _instance
 
 
+def configure_orchestrator(
+    api_key: str = "",
+    model: str = "",
+    provider: str = "anthropic",
+) -> Orchestrator:
+    """Reconfigure the global orchestrator with new settings.
+
+    Preserves existing TokenUsage across reconfiguration so session
+    totals aren't lost when the user changes settings mid-session.
+    """
+    global _instance
+
+    # Preserve existing usage if we're reconfiguring
+    existing_usage = _instance.usage if _instance else TokenUsage()
+
+    if provider == "cloud":
+        llm_provider = CompassCloudProvider()
+    else:
+        llm_provider = AnthropicProvider(api_key=api_key or None)
+
+    _instance = Orchestrator(provider=llm_provider, default_model=model)
+    _instance.usage = existing_usage
+    return _instance
+
+
 def reset_orchestrator() -> None:
     global _instance
     _instance = None
