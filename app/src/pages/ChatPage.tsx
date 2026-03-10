@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageCircle, Send, Loader2, Trash2, Database } from "lucide-react";
+import { MessageCircle, Send, Loader2, Trash2, Database, AlertCircle, RefreshCw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useChatStore, type AgentMode } from "../stores/chat";
 import { useStreamingChat } from "../hooks/useStreamingChat";
+import { useNavigate } from "react-router-dom";
 
 const sourceColors: Record<string, string> = {
   code: "text-compass-code",
@@ -22,9 +23,12 @@ const agentModes: { id: AgentMode; label: string }[] = [
 
 export default function ChatPage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
+  const evidenceCount = useWorkspaceStore((s) => s.evidenceCount);
+  const isIngesting = useWorkspaceStore((s) => s.isIngesting);
   const { messages, loading, agentMode, clearMessages, setAgentMode, loadHistory } =
     useChatStore();
   const { sendStreaming } = useStreamingChat();
+  const navigate = useNavigate();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +83,31 @@ export default function ChatPage() {
           </button>
         ))}
       </div>
+
+      {/* Ingestion status banner */}
+      {workspacePath && isIngesting && (
+        <div className="flex items-center gap-2 px-8 py-2 bg-compass-accent/10 border-b border-compass-accent/20 shrink-0">
+          <RefreshCw className="w-3.5 h-3.5 text-compass-accent animate-spin" />
+          <span className="text-xs text-compass-accent">
+            Ingesting evidence... Chat will be context-aware once complete.
+          </span>
+        </div>
+      )}
+      {workspacePath && !isIngesting && evidenceCount === 0 && (
+        <div className="flex items-center gap-2 px-8 py-2 bg-yellow-500/10 border-b border-yellow-500/20 shrink-0">
+          <AlertCircle className="w-3.5 h-3.5 text-yellow-400" />
+          <span className="text-xs text-yellow-400">
+            No evidence ingested yet.{" "}
+            <button
+              onClick={() => navigate("/workspace")}
+              className="underline hover:text-yellow-300 transition-colors"
+            >
+              Connect sources in Workspace
+            </button>{" "}
+            to get grounded insights.
+          </span>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-4 space-y-4">

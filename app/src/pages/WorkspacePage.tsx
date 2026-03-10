@@ -31,6 +31,47 @@ export default function WorkspacePage() {
     }
   }, [loaded]);
 
+  // Load workspace state from engine and auto-ingest if needed
+  useEffect(() => {
+    if (!workspacePath) return;
+    (async () => {
+      try {
+        const info = (await window.compass.engine.call("/workspace/info", {
+          workspace_path: workspacePath,
+        })) as {
+          status: string;
+          name: string;
+          description: string;
+          sources: Array<{ type: string; name: string; path?: string }>;
+          evidence_count: number;
+        };
+        if (info.status === "ok") {
+          // Populate sources in the store
+          const store = useWorkspaceStore.getState();
+          store.setSources(
+            info.sources.map((s) => ({
+              type: s.type,
+              name: s.name,
+              path: s.path ?? null,
+              url: null,
+              options: {},
+            }))
+          );
+          // If sources exist but no evidence, auto-ingest
+          if (info.sources.length > 0 && info.evidence_count === 0 && !store.isIngesting) {
+            store.triggerIngestion(workspacePath);
+          }
+          // If evidence exists, update the count
+          if (info.evidence_count > 0) {
+            store.setIngestionResults([], info.evidence_count, {});
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load workspace info:", err);
+      }
+    })();
+  }, [workspacePath]);
+
   if (!workspacePath && !showCreate) {
     return (
       <WorkspacePicker

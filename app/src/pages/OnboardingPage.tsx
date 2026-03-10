@@ -15,6 +15,7 @@ import {
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useSettingsStore } from "../stores/settings";
+import { useWorkspaceManager } from "../stores/workspaceManager";
 import { useNavigate } from "react-router-dom";
 
 type Step = 1 | 2 | 3 | 4;
@@ -56,6 +57,7 @@ export default function OnboardingPage() {
   const setSettingsApiKey = useSettingsStore((s) => s.setApiKey);
   const setSettingsModel = useSettingsStore((s) => s.setModel);
   const setProvider = useSettingsStore((s) => s.setProvider);
+  const addWorkspaceEntry = useWorkspaceManager((s) => s.addWorkspace);
   const navigate = useNavigate();
 
   async function handlePickFolder() {
@@ -99,8 +101,13 @@ export default function OnboardingPage() {
       // may already be initialized
     }
 
-    // Save settings
+    // Save settings and register in workspace manager
     setWorkspace(workspacePath, productName, productDesc);
+    await addWorkspaceEntry({
+      name: productName,
+      description: productDesc,
+      path: workspacePath,
+    });
     if (useOwnKey && apiKey) {
       setProvider("byok");
       setSettingsApiKey(apiKey);
@@ -108,6 +115,11 @@ export default function OnboardingPage() {
       setProvider("compass");
     }
     setSettingsModel(model);
+
+    // Auto-trigger ingestion in background (non-blocking)
+    if (connectedSources.length > 0) {
+      useWorkspaceStore.getState().triggerIngestion(workspacePath);
+    }
 
     completeOnboarding();
     navigate("/workspace");
