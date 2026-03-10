@@ -125,11 +125,17 @@ def ingest():
     table.add_column("Type")
     table.add_column("Items", justify="right")
 
+    from datetime import datetime
+
     for source in config.sources:
         try:
             connector_cls = get_connector(source.type)
             connector = connector_cls(source)
             evidence = connector.ingest()
+            now = datetime.now()
+            for ev in evidence:
+                ev.source_name = source.name
+                ev.ingested_at = now
             kg.add_many(evidence)
             count = len(evidence)
             total += count
@@ -444,7 +450,9 @@ def _ask_interactive(kg, config, compass_dir: Path):
 # --- status ---
 
 @app.command()
-def status():
+def status(
+    health: bool = typer.Option(False, "--health", help="Show evidence freshness per source"),
+):
     """Show the current state of the Compass workspace."""
     try:
         config = load_config()
@@ -471,6 +479,11 @@ def status():
         console.print("[dim]No sources connected yet.[/dim]")
 
     compass_dir = get_compass_dir()
+
+    if health:
+        _show_health(compass_dir)
+        return
+
     ingest_summary = compass_dir / "last_ingest.txt"
     if ingest_summary.exists():
         console.print(f"\n[dim]{ingest_summary.read_text()}[/dim]")
@@ -480,6 +493,54 @@ def status():
     outputs = list(output_dir.glob("*.md"))
     if outputs:
         console.print(f"\n[dim]Outputs: {', '.join(f.name for f in outputs)}[/dim]")
+
+
+def _show_health(compass_dir: Path):
+    """Show evidence freshness per source."""
+    from datetime import datetime, timedelta
+    from compass.engine.knowledge_graph import KnowledgeGraph
+
+    kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+    if len(kg) == 0:
+        console.print("[yellow]No evidence ingested yet.[/yellow]")
+        return
+
+    # Group by source_name (or connector if source_name not set)
+    source_groups: dict[str, list] = {}
+    for ev in kg.store.items:
+        key = ev.source_name or f"{ev.source_type.value}:{ev.connector}"
+        source_groups.setdefault(key, []).append(ev)
+
+    table = Table(title="Evidence Health")
+    table.add_column("Source", style="bold")
+    table.add_column("Type")
+    table.add_column("Items", justify="right")
+    table.add_column("Last Ingested")
+    table.add_column("Status")
+
+    stale_threshold = datetime.now() - timedelta(days=7)
+
+    for source_name, items in sorted(source_groups.items()):
+        source_type = items[0].source_type.value
+        count = len(items)
+        latest = max(ev.ingested_at for ev in items)
+        age = datetime.now() - latest
+
+        if age < timedelta(hours=1):
+            age_str = f"{int(age.total_seconds() // 60)} minutes ago"
+        elif age < timedelta(days=1):
+            age_str = f"{int(age.total_seconds() // 3600)} hours ago"
+        else:
+            age_str = f"{age.days} days ago"
+
+        if latest < stale_threshold:
+            status_str = "[red]stale[/red]"
+        else:
+            status_str = "[green]fresh[/green]"
+
+        table.add_row(source_name, source_type, str(count), age_str, status_str)
+
+    console.print(table)
 
 
 # --- helpers ---

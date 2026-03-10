@@ -57,11 +57,21 @@ If no real conflicts exist, return {{"conflicts": []}}. Only flag genuine disagr
 
 
 def _format_evidence(items: list[Evidence], max_items: int = 15) -> str:
-    """Format evidence items for the LLM prompt."""
+    """Format evidence items for the LLM prompt, including freshness."""
+    from datetime import datetime, timedelta
+
     lines = []
+    stale_threshold = datetime.now() - timedelta(days=7)
     for item in items[:max_items]:
         content_preview = item.content[:500] + "..." if len(item.content) > 500 else item.content
-        lines.append(f"- [{item.title}]: {content_preview}")
+        freshness = ""
+        if hasattr(item, "ingested_at") and item.ingested_at:
+            age = datetime.now() - item.ingested_at
+            if age > timedelta(days=7):
+                freshness = f" ⚠️ STALE ({age.days} days old)"
+            elif age > timedelta(days=1):
+                freshness = f" ({age.days}d ago)"
+        lines.append(f"- [{item.title}]{freshness}: {content_preview}")
     return "\n".join(lines) if lines else "(no evidence from this source)"
 
 

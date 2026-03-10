@@ -74,10 +74,17 @@ opportunities supported by multiple source types over single-source signals."""
 def _format_evidence_list(items: list[Evidence], max_items: int = 20) -> str:
     if not items:
         return "(no evidence from this source)"
+    from datetime import datetime, timedelta
+
     lines = []
     for item in items[:max_items]:
         preview = item.content[:300] + "..." if len(item.content) > 300 else item.content
-        lines.append(f"- **{item.title}**: {preview}")
+        freshness = ""
+        if hasattr(item, "ingested_at") and item.ingested_at:
+            age = datetime.now() - item.ingested_at
+            if age > timedelta(days=7):
+                freshness = f" ⚠️ STALE ({age.days} days old)"
+        lines.append(f"- **{item.title}**{freshness}: {preview}")
     return "\n".join(lines)
 
 

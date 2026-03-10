@@ -66,6 +66,8 @@ class Evidence(BaseModel):
     content: str
     metadata: dict = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=datetime.now)
+    ingested_at: datetime = Field(default_factory=datetime.now)
+    source_name: str = ""  # which SourceConfig.name produced this
 
     @property
     def short(self) -> str:
