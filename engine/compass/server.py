@@ -25,7 +25,6 @@ from compass.engine.orchestrator import get_orchestrator, configure_orchestrator
 from compass.engine.reconciler import Reconciler
 from compass.engine.discoverer import Discoverer
 from compass.engine.specifier import Specifier
-from compass.models.sources import Evidence, SourceType
 
 
 _kg: KnowledgeGraph | None = None

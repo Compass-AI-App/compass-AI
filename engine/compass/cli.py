@@ -215,8 +215,8 @@ def reconcile():
             border_style=color,
         ))
 
-    console.print(f"[dim]Conflicts reveal where your product's sources of truth disagree — "
-                  f"these are where opportunities hide.[/dim]")
+    console.print("[dim]Conflicts reveal where your product's sources of truth disagree — "
+                  "these are where opportunities hide.[/dim]")
 
     # Save report
     output_dir = get_output_dir()
@@ -455,7 +455,6 @@ def _ask_single(kg, config, question: str):
     prompt = ASK_PROMPT.format(question=question, evidence=evidence_text)
 
     from rich.live import Live
-    from rich.text import Text
 
     response_text = ""
     with Live("", console=console, refresh_per_second=10) as live:
@@ -647,7 +646,7 @@ def history():
         console.print("[dim]No discovery history yet. Run: compass discover[/dim]")
         return
 
-    console.print(f"\n[bold]Discovery History[/bold]")
+    console.print("\n[bold]Discovery History[/bold]")
     console.print(f"[dim]Total runs: {summary['total_runs']}  |  First: {summary.get('first_run', 'N/A')[:10]}  |  Last: {summary.get('last_run', 'N/A')[:10]}[/dim]")
     console.print(f"[dim]Unique opportunities: {summary.get('total_unique_opportunities', 0)}  |  Unique conflicts: {summary.get('total_unique_conflicts', 0)}[/dim]\n")
 
@@ -713,7 +712,6 @@ def doctor(
     fix: bool = typer.Option(False, "--fix", help="Attempt to auto-fix issues"),
 ):
     """Pre-flight check to diagnose Compass setup issues."""
-    import shutil
     import sys
 
     checks_passed = 0
@@ -1105,7 +1103,6 @@ def mcp_config(ctx: typer.Context):
         return
 
     import json
-    import sys
 
     compass_path = _find_compass_executable()
     config = {
@@ -1117,8 +1114,8 @@ def mcp_config(ctx: typer.Context):
         }
     }
     console.print(json.dumps(config, indent=2))
-    console.print(f"\n[dim]Add this to your Claude Code or Cursor MCP config.[/dim]")
-    console.print(f"[dim]Or run: compass mcp install[/dim]")
+    console.print("\n[dim]Add this to your Claude Code or Cursor MCP config.[/dim]")
+    console.print("[dim]Or run: compass mcp install[/dim]")
 
 
 @mcp_app.command()
@@ -1154,7 +1151,7 @@ def install():
         mcp_servers = config.setdefault("mcpServers", {})
         mcp_servers["compass"] = server_config
         claude_config_path.write_text(json.dumps(config, indent=2))
-        console.print(f"[green]Installed Compass MCP server in Claude Code[/green]")
+        console.print("[green]Installed Compass MCP server in Claude Code[/green]")
         console.print(f"  [dim]{claude_config_path}[/dim]")
         installed = True
 
@@ -1171,7 +1168,7 @@ def install():
         mcp_servers = config.setdefault("mcpServers", {})
         mcp_servers["compass"] = server_config
         cursor_config_path.write_text(json.dumps(config, indent=2))
-        console.print(f"[green]Installed Compass MCP server in Cursor[/green]")
+        console.print("[green]Installed Compass MCP server in Cursor[/green]")
         console.print(f"  [dim]{cursor_config_path}[/dim]")
         installed = True
 
@@ -1179,7 +1176,7 @@ def install():
         console.print("[yellow]No Claude Code or Cursor config directory found.[/yellow]")
         console.print("Run [bold]compass mcp[/bold] to get the config JSON for manual setup.")
     else:
-        console.print(f"\n[dim]Restart your AI tool to activate Compass tools.[/dim]")
+        console.print("\n[dim]Restart your AI tool to activate Compass tools.[/dim]")
 
 
 def _find_compass_executable() -> str:

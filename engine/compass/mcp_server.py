@@ -169,7 +169,7 @@ def compass_reconcile() -> str:
     high = report.high
     high_count = len(high)
     lines = [
-        f"# Conflict Report",
+        "# Conflict Report",
         "",
     ]
 

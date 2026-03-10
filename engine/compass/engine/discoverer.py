@@ -100,14 +100,14 @@ Return 3-7 opportunities, ranked by confidence then impact. Every opportunity mu
 cite at least one specific evidence title. Do not invent evidence that isn't listed above."""
 
 
-def _format_evidence_list(items: list[Evidence], max_items: int = 20) -> str:
+def _format_evidence_list(items: list[Evidence], max_items: int = 10) -> str:
     if not items:
         return "(no evidence from this source)"
     from datetime import datetime, timedelta
 
     lines = []
     for item in items[:max_items]:
-        preview = item.content[:300] + "..." if len(item.content) > 300 else item.content
+        preview = item.content[:200] + "..." if len(item.content) > 200 else item.content
         freshness = ""
         if hasattr(item, "ingested_at") and item.ingested_at:
             age = datetime.now() - item.ingested_at
@@ -117,15 +117,20 @@ def _format_evidence_list(items: list[Evidence], max_items: int = 20) -> str:
     return "\n".join(lines)
 
 
-def _format_conflicts(report: ConflictReport) -> str:
+def _format_conflicts(report: ConflictReport, max_conflicts: int = 10) -> str:
     if not report.conflicts:
         return "(no conflicts detected)"
     lines = []
-    for c in report.conflicts:
+    # Prioritize HIGH severity conflicts, cap total count
+    sorted_conflicts = sorted(report.conflicts, key=lambda c: c.severity.value, reverse=True)
+    for c in sorted_conflicts[:max_conflicts]:
+        desc = c.description[:200] + "..." if len(c.description) > 200 else c.description
         lines.append(
             f"- [{c.severity.value.upper()}] **{c.title}** ({c.conflict_type.description}): "
-            f"{c.description}"
+            f"{desc}"
         )
+    if len(report.conflicts) > max_conflicts:
+        lines.append(f"- ... and {len(report.conflicts) - max_conflicts} more conflicts")
     return "\n".join(lines)
 
 
@@ -162,7 +167,7 @@ class Discoverer:
             )
 
             try:
-                result = ask_json(prompt, system=DISCOVER_SYSTEM, model=self.model)
+                result = ask_json(prompt, system=DISCOVER_SYSTEM, model=self.model, max_tokens=3000)
             except Exception as e:
                 console.print(f"[red]Discovery failed: {e}[/red]")
                 return []

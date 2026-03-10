@@ -11,7 +11,7 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Generator
 
 logger = logging.getLogger(__name__)
@@ -138,13 +138,22 @@ class TaskforceProvider(LLMProvider):
     DEFAULT_MODEL = "claude-sonnet-4-5"
     BASE_URL = "https://hendrix-genai.spotify.net/taskforce/anthropic/v1"
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None):
-        import urllib.request
+    # Anthropic SDK model IDs → Taskforce model names
+    _MODEL_MAP = {
+        "claude-sonnet-4-20250514": "claude-sonnet-4-5",
+        "claude-opus-4-20250514": "claude-opus-4-5",
+        "claude-haiku-4-20250514": "claude-haiku-4-5",
+    }
 
+    def __init__(self, api_key: str | None = None, base_url: str | None = None):
         self.api_key = api_key or os.environ.get("TASKFORCE_API_KEY", "")
         if not self.api_key:
             raise ValueError("TASKFORCE_API_KEY not set.")
         self.base_url = (base_url or os.environ.get("TASKFORCE_BASE_URL", "")).rstrip("/") or self.BASE_URL
+
+    def _resolve_model(self, model: str) -> str:
+        """Translate Anthropic model IDs to Taskforce-compatible names."""
+        return self._MODEL_MAP.get(model, model) if model else self.DEFAULT_MODEL
 
     def complete(
         self,
@@ -165,7 +174,7 @@ class TaskforceProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
 
         payload = json.dumps({
-            "model": model or self.DEFAULT_MODEL,
+            "model": self._resolve_model(model),
             "max_tokens": max_tokens,
             "messages": messages,
         }).encode()
@@ -412,6 +421,13 @@ def reset_orchestrator() -> None:
 
 
 def _create_default_provider() -> LLMProvider:
+    # Load .env early so COMPASS_LLM_PROVIDER and keys are available
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
     provider_name = os.environ.get("COMPASS_LLM_PROVIDER", "anthropic").lower()
     if provider_name == "cloud":
         return CompassCloudProvider()
