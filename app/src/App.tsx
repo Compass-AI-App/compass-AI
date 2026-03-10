@@ -18,9 +18,7 @@ function AppWithStartup() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    loadSettings();
-    pushToEngine();
-    setReady(true);
+    loadSettings().then(() => pushToEngine()).finally(() => setReady(true));
   }, [loadSettings, pushToEngine]);
 
   if (!ready) return null;

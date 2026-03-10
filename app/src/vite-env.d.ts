@@ -13,9 +13,16 @@ interface CompassApp {
   saveFile: (defaultName: string, content: string) => Promise<string | null>;
 }
 
+interface CompassSecrets {
+  store: (key: string, value: string) => Promise<boolean>;
+  load: (key: string) => Promise<string | null>;
+  delete: (key: string) => Promise<boolean>;
+}
+
 interface Window {
   compass: {
     engine: CompassEngine;
     app: CompassApp;
+    secrets: CompassSecrets;
   };
 }

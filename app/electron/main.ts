@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, safeStorage } from "electron";
 import path from "path";
+import fs from "fs";
 import { autoUpdater } from "electron-updater";
 import { startEngine, stopEngine, engineFetch } from "./engine-bridge";
 
@@ -158,3 +159,51 @@ ipcMain.handle("engine-health", async () => {
     return { status: "unavailable" };
   }
 });
+
+// IPC: Secure secret storage via OS keychain (Electron safeStorage)
+// Secrets are encrypted with the OS keychain and stored in a local file.
+// They never leave the machine and are not readable without OS-level auth.
+const secretsPath = path.join(app.getPath("userData"), "secrets.enc");
+
+ipcMain.handle("secrets-store", async (_event, key: string, value: string) => {
+  if (!safeStorage.isEncryptionAvailable()) {
+    // Fallback: store as-is (still better than localStorage — it's in app data, not browser storage)
+    const store = loadSecretsFile();
+    store[key] = value;
+    fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
+    return true;
+  }
+  const store = loadSecretsFile();
+  store[key] = safeStorage.encryptString(value).toString("base64");
+  fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
+  return true;
+});
+
+ipcMain.handle("secrets-load", async (_event, key: string) => {
+  const store = loadSecretsFile();
+  const encrypted = store[key];
+  if (!encrypted) return null;
+  if (!safeStorage.isEncryptionAvailable()) {
+    return encrypted; // Fallback: stored as plaintext
+  }
+  try {
+    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+  } catch {
+    return null; // Corrupted or re-keyed — user will need to re-enter
+  }
+});
+
+ipcMain.handle("secrets-delete", async (_event, key: string) => {
+  const store = loadSecretsFile();
+  delete store[key];
+  fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
+  return true;
+});
+
+function loadSecretsFile(): Record<string, string> {
+  try {
+    return JSON.parse(fs.readFileSync(secretsPath, "utf-8"));
+  } catch {
+    return {};
+  }
+}

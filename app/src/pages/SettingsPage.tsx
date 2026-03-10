@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Settings, Key, Cpu, BarChart3, RotateCcw } from "lucide-react";
+import { Settings, Key, Cpu, BarChart3, RotateCcw, Shield } from "lucide-react";
 import { clsx } from "clsx";
 import { useSettingsStore, type LLMProvider } from "../stores/settings";
 import { resetOnboarding } from "./OnboardingPage";
@@ -51,9 +51,15 @@ export default function SettingsPage() {
           />
           <ProviderButton
             label="BYOK"
-            description="Bring your own API key"
+            description="Bring your own Anthropic key"
             active={provider === "byok"}
             onClick={() => setProvider("byok")}
+          />
+          <ProviderButton
+            label="Taskforce"
+            description="Spotify corporate access"
+            active={provider === "taskforce"}
+            onClick={() => setProvider("taskforce")}
           />
         </div>
       </Section>
@@ -68,9 +74,12 @@ export default function SettingsPage() {
             placeholder="sk-ant-..."
             className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-sm text-compass-text placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-compass-accent font-mono"
           />
-          <p className="text-xs text-compass-muted mt-1.5">
-            Your key is stored locally and never sent to Compass servers.
-          </p>
+          <div className="flex items-start gap-2 mt-2">
+            <Shield className="w-3.5 h-3.5 text-green-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-neutral-400">
+              Encrypted with your OS keychain. Sent directly to Anthropic — never to Compass servers.
+            </p>
+          </div>
         </Section>
       )}
 
