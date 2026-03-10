@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type LLMProvider = "compass" | "byok";
+export type LLMProvider = "compass" | "byok" | "taskforce";
 
 interface SettingsState {
   provider: LLMProvider;
@@ -81,7 +81,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         body: JSON.stringify({
           api_key: provider === "byok" ? apiKey : "",
           model,
-          provider: provider === "byok" ? "anthropic" : "cloud",
+          provider: provider === "taskforce" ? "taskforce" : provider === "byok" ? "anthropic" : "cloud",
         }),
         headers: { "Content-Type": "application/json" },
       });
