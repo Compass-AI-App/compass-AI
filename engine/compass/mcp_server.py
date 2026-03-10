@@ -155,17 +155,35 @@ def compass_reconcile() -> str:
     config = _get_config(workspace)
     from compass.engine.reconciler import Reconciler
 
-    reconciler = Reconciler(kg, model=config.model)
-    report = reconciler.reconcile()
+    try:
+        reconciler = Reconciler(kg, model=config.model)
+        report = reconciler.reconcile()
+    except ValueError as e:
+        if "API_KEY" in str(e).upper():
+            return "ANTHROPIC_API_KEY not set. Set it in your environment or run `compass configure`."
+        raise
 
     if not report.conflicts:
         return "No conflicts detected between sources. Your sources of truth are aligned."
 
+    high = report.high
+    high_count = len(high)
     lines = [
         f"# Conflict Report",
-        f"Found **{len(report)} conflicts** between sources of truth.",
         "",
     ]
+
+    # Lead with summary paragraph
+    if high_count:
+        top = high[0]
+        lines.append(
+            f"**Most critical finding:** {top.title} — {top.description[:200]}{'...' if len(top.description) > 200 else ''}"
+        )
+        lines.append("")
+    lines.append(
+        f"Found **{len(report)} conflicts** ({high_count} high severity) across your sources of truth."
+    )
+    lines.append("")
 
     for conflict in report.conflicts:
         severity = conflict.severity.value.upper()
@@ -175,12 +193,14 @@ def compass_reconcile() -> str:
             conflict.description,
             "",
             f"**Type:** {conflict.conflict_type.description}",
-            f"**Recommendation:** {conflict.recommendation}",
-            "",
+            f"**Why it matters:** {conflict.recommendation}",
         ])
+        if conflict.signal_strength > 1:
+            lines.append(f"**Signal:** Supported by {conflict.signal_strength} evidence items")
+        lines.append("")
 
     lines.append("---")
-    lines.append("*Conflicts reveal where your product's sources of truth disagree — these are where opportunities hide.*")
+    lines.append("*Use `compass_discover` to turn these conflicts into actionable product opportunities.*")
     return "\n".join(lines)
 
 
@@ -205,25 +225,36 @@ def compass_discover() -> str:
     if not opportunities:
         return "No clear opportunities found. Try adding more evidence sources."
 
+    # Summary paragraph
+    high_conf = [o for o in opportunities if o.confidence.value == "high"]
+    conflict_count = len(report.conflicts) if report else 0
+    summary = (
+        f"Analyzed **{len(kg)} evidence items** across {len(kg.store.summary)} source types"
+        f" and found **{conflict_count} conflicts**. "
+        f"Synthesized into **{len(opportunities)} opportunities** "
+        f"({len(high_conf)} high confidence)."
+    )
+
     lines = [
         "# Product Opportunities",
-        f"Ranked by confidence and impact, grounded in {len(kg)} evidence items.",
+        "",
+        summary,
         "",
     ]
 
     for opp in opportunities:
         lines.extend([
-            f"## #{opp.rank}: {opp.title} ({opp.confidence.value.upper()} confidence)",
+            f"## #{opp.rank}: {opp.title}",
+            f"**Confidence:** {opp.confidence.value.upper()} | **Impact:** {opp.estimated_impact}",
             "",
             opp.description,
             "",
             f"**Evidence:** {opp.evidence_summary}",
-            f"**Impact:** {opp.estimated_impact}",
             "",
         ])
 
     lines.append("---")
-    lines.append("*To generate an implementation spec, use `compass_specify` with the opportunity title.*")
+    lines.append(f'*To generate an implementation spec: use `compass_specify` with the title, e.g., `compass_specify("{opportunities[0].title}")`*')
     return "\n".join(lines)
 
 
@@ -298,25 +329,14 @@ def compass_ask(question: str) -> str:
 
     system = (
         "You are Compass, an AI product discovery assistant. Answer the user's question "
-        "based on the evidence provided. Cite specific evidence by title in [brackets]. "
-        "If evidence is insufficient, say what's missing."
+        "based on the evidence provided. Cite evidence naturally inline — weave titles "
+        "into your response rather than listing them separately. For example, write "
+        "'According to [Sync failure rate — last 30 days], latency increased 5x' "
+        "rather than a separate citations block. If evidence is insufficient, say what's missing."
     )
     prompt = f"## Question\n{question}\n\n## Evidence\n{evidence_text}\n\nAnswer grounded in the evidence above."
 
     response = ask(prompt, system=system, model=config.model)
-
-    # Append sources
-    if related:
-        seen = set()
-        source_lines = []
-        for ev in related:
-            key = f"{ev.source_type.value}:{ev.connector}"
-            if key not in seen:
-                seen.add(key)
-                count = len([e for e in related if e.connector == ev.connector])
-                source_lines.append(f"- {key} ({count} items)")
-        response += "\n\n---\n**Sources:** " + ", ".join(f"{k}" for k in seen)
-
     return response
 
 
