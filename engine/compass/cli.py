@@ -600,6 +600,172 @@ def _show_health(compass_dir: Path):
     console.print(table)
 
 
+# --- demo ---
+
+@app.command()
+def demo(
+    skip_spec: bool = typer.Option(False, "--skip-spec", help="Skip spec generation for faster demo"),
+):
+    """Run the full Compass pipeline on compelling sample data in one command."""
+    import time
+    import tempfile
+    import shutil
+    from datetime import datetime
+
+    start_time = time.time()
+
+    # Find sample data
+    demo_data_dir = _find_demo_data()
+    if not demo_data_dir:
+        console.print("[red]Could not find demo sample data.[/red]")
+        raise typer.Exit(1)
+
+    console.print(Panel(
+        "[bold]Compass Demo[/bold]\n\n"
+        "Watch Compass analyze a real product (SyncFlow) across 5 evidence sources\n"
+        "and surface where the sources of truth disagree.",
+        border_style="blue",
+    ))
+    console.print()
+
+    # Create temp workspace
+    workspace = Path(tempfile.mkdtemp(prefix="compass-demo-"))
+
+    try:
+        # Step 1: Init
+        console.print("[bold cyan]Step 1/5:[/bold cyan] Initializing workspace...")
+        config = ProductConfig(
+            name="SyncFlow",
+            description="Real-time integration platform — the plumbing that keeps tools in sync",
+        )
+        save_config(config, workspace)
+
+        # Step 2: Connect sources
+        console.print("[bold cyan]Step 2/5:[/bold cyan] Connecting 5 evidence sources...")
+        sources = [
+            SourceConfig(type="github", name="code:syncflow-engine", path=str(demo_data_dir / "code")),
+            SourceConfig(type="docs", name="docs:strategy", path=str(demo_data_dir / "strategy")),
+            SourceConfig(type="analytics", name="analytics:metrics", path=str(demo_data_dir / "analytics")),
+            SourceConfig(type="interviews", name="interviews:customers", path=str(demo_data_dir / "interviews")),
+            SourceConfig(type="support", name="support:tickets", path=str(demo_data_dir / "support")),
+        ]
+        for source in sources:
+            config.add_source(source)
+        save_config(config, workspace)
+        console.print(f"  Connected: {', '.join(s.name for s in sources)}")
+
+        # Step 3: Ingest
+        console.print("[bold cyan]Step 3/5:[/bold cyan] Ingesting evidence...")
+        from compass.connectors import get_connector
+        from compass.engine.knowledge_graph import KnowledgeGraph
+
+        compass_dir = get_compass_dir(workspace)
+        kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+        kg.clear()
+
+        total = 0
+        for source in config.sources:
+            connector_cls = get_connector(source.type)
+            connector = connector_cls(source)
+            evidence = connector.ingest()
+            now = datetime.now()
+            for ev in evidence:
+                ev.source_name = source.name
+                ev.ingested_at = now
+            kg.add_many(evidence)
+            total += len(evidence)
+            console.print(f"  [dim]{source.name}: {len(evidence)} items[/dim]")
+
+        ingest_time = time.time() - start_time
+        console.print(f"  [green]Ingested {total} evidence items from {len(sources)} sources ({ingest_time:.1f}s)[/green]")
+        console.print()
+
+        # Step 4: Reconcile
+        console.print("[bold cyan]Step 4/5:[/bold cyan] Finding conflicts between sources of truth...")
+        from compass.engine.reconciler import Reconciler
+
+        reconciler = Reconciler(kg, model=config.model)
+        report = reconciler.reconcile()
+
+        if report.conflicts:
+            console.print(f"\n  [bold]Found {len(report)} conflicts[/bold]\n")
+            for conflict in report.conflicts:
+                severity_color = {"high": "red", "medium": "yellow", "low": "dim"}
+                color = severity_color.get(conflict.severity.value, "white")
+                console.print(Panel(
+                    f"[bold]{conflict.title}[/bold]\n\n"
+                    f"{conflict.description}\n\n"
+                    f"[dim]Recommendation: {conflict.recommendation}[/dim]",
+                    title=f"[{color}]{conflict.severity.value.upper()}[/{color}] — {conflict.conflict_type.description}",
+                    border_style=color,
+                    width=90,
+                ))
+        console.print()
+
+        # Step 5: Discover
+        console.print("[bold cyan]Step 5/5:[/bold cyan] Synthesizing product opportunities...")
+        from compass.engine.discoverer import Discoverer
+
+        discoverer = Discoverer(kg, model=config.model)
+        opportunities = discoverer.discover(report)
+
+        if opportunities:
+            console.print(f"\n  [bold]Top {len(opportunities)} Opportunities[/bold]\n")
+            for opp in opportunities:
+                confidence_color = {"high": "green", "medium": "yellow", "low": "dim"}
+                color = confidence_color.get(opp.confidence.value, "white")
+                console.print(Panel(
+                    f"[bold]{opp.description}[/bold]\n\n"
+                    f"[dim]Evidence:[/dim] {opp.evidence_summary}\n\n"
+                    f"[dim]Impact:[/dim] {opp.estimated_impact}",
+                    title=f"#{opp.rank} [{color}]{opp.confidence.value.upper()}[/{color}]  {opp.title}",
+                    width=90,
+                ))
+
+        # Optional: Generate spec for #1 opportunity
+        if not skip_spec and opportunities:
+            console.print()
+            console.print("[bold cyan]Bonus:[/bold cyan] Generating agent-ready spec for #1 opportunity...")
+            from compass.engine.specifier import Specifier
+            specifier = Specifier(kg, model=config.model)
+            spec = specifier.specify(opportunities[0])
+            console.print()
+            console.print(Markdown(spec.to_markdown()))
+
+        # Summary
+        elapsed = time.time() - start_time
+        console.print()
+        console.print(Panel(
+            f"[bold green]Compass analyzed {total} evidence items from {len(sources)} sources "
+            f"in {elapsed:.0f} seconds.[/bold green]\n\n"
+            f"Conflicts found: {len(report)}\n"
+            f"Opportunities surfaced: {len(opportunities)}\n\n"
+            f"[dim]This is what Compass does: it reads your product's sources of truth,\n"
+            f"finds where they disagree, and tells you what to build next — grounded\n"
+            f"in evidence, not opinion.[/dim]",
+            title="[bold]Demo Complete[/bold]",
+            border_style="green",
+        ))
+
+    finally:
+        # Cleanup
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def _find_demo_data() -> Path | None:
+    """Find the demo sample data directory."""
+    # Check relative to repo root
+    candidates = [
+        Path(__file__).parent.parent.parent / "demo" / "sample_data",  # engine/compass/cli.py -> demo/
+        Path.cwd() / "demo" / "sample_data",
+        Path.cwd().parent / "demo" / "sample_data",
+    ]
+    for candidate in candidates:
+        if candidate.exists() and (candidate / "code").exists():
+            return candidate
+    return None
+
+
 # --- helpers ---
 
 def _load_knowledge_graph(compass_dir: Path):
