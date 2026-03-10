@@ -151,6 +151,33 @@ def init_workspace(req: InitRequest):
     return {"status": "ok", "workspace": req.workspace_path, "name": req.name}
 
 
+# ---------- Workspace Info ----------
+
+@app.post("/workspace/info")
+def workspace_info(req: WorkspaceRequest):
+    """Return workspace state: product config, sources, evidence count."""
+    base = Path(req.workspace_path)
+    try:
+        config = load_config(base)
+    except FileNotFoundError:
+        raise HTTPException(404, "No Compass workspace found at this path.")
+
+    # Count evidence items
+    evidence_count = 0
+    kg = _try_get_kg(req.workspace_path)
+    if kg:
+        evidence_count = len(kg)
+
+    return {
+        "status": "ok",
+        "name": config.name,
+        "description": config.description,
+        "sources": [s.model_dump() for s in config.sources],
+        "evidence_count": evidence_count,
+        "model": config.model,
+    }
+
+
 # ---------- Connect ----------
 
 @app.post("/connect")
@@ -437,17 +464,44 @@ Ground everything in the evidence provided.""",
 }
 
 
-def _get_chat_system(agent_mode: str, has_evidence: bool = True) -> str:
+def _get_chat_system(agent_mode: str, has_evidence: bool = True, workspace_path: str = "") -> str:
+    # Load product context if available
+    product_context = ""
+    if workspace_path:
+        try:
+            config = load_config(Path(workspace_path))
+            product_context = f"\n\nYou are helping with the product \"{config.name}\"."
+            if config.description:
+                product_context += f" Description: {config.description}"
+            product_context += "\n"
+        except (FileNotFoundError, Exception):
+            pass
+
     if not has_evidence:
-        return CHAT_SYSTEM_NO_EVIDENCE
-    return AGENT_MODE_PROMPTS.get(agent_mode, CHAT_SYSTEM)
+        return CHAT_SYSTEM_NO_EVIDENCE + product_context
+    base_prompt = AGENT_MODE_PROMPTS.get(agent_mode, CHAT_SYSTEM)
+    return base_prompt + product_context
 
 
 def _try_get_kg(workspace_path: str) -> "KnowledgeGraph | None":
-    """Try to load the knowledge graph, returning None if unavailable."""
+    """Try to load the knowledge graph, returning None if unavailable.
+
+    Falls back to loading from persistence if the in-memory global is empty,
+    which handles engine restarts and race conditions during ingestion.
+    """
     try:
         return _get_kg(workspace_path)
     except (HTTPException, FileNotFoundError, Exception):
+        # _get_kg raises when KG is empty — try loading from disk directly
+        try:
+            base = Path(workspace_path)
+            kg_dir = get_compass_dir(base) / "knowledge"
+            if kg_dir.exists():
+                kg = KnowledgeGraph(persist_dir=kg_dir)
+                if len(kg) > 0:
+                    return kg
+        except Exception:
+            pass
         return None
 
 
@@ -498,7 +552,7 @@ def chat(req: ChatRequest):
         ]
 
     prompt = _build_chat_prompt(req.message, req.history, evidence_context)
-    system = _get_chat_system(req.agent_mode, has_evidence=bool(kg))
+    system = _get_chat_system(req.agent_mode, has_evidence=bool(kg), workspace_path=req.workspace_path)
     response = orch.ask(prompt, system=system)
 
     return {
@@ -531,7 +585,7 @@ def chat_stream(req: ChatRequest):
 
     def generate():
         yield _sse_event("citations", {"citations": citations})
-        system = _get_chat_system(req.agent_mode, has_evidence=bool(kg))
+        system = _get_chat_system(req.agent_mode, has_evidence=bool(kg), workspace_path=req.workspace_path)
         for token in orch.ask_stream(prompt, system=system):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"

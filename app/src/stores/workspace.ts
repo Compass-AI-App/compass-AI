@@ -30,6 +30,7 @@ interface WorkspaceState {
   setReconciling: (v: boolean) => void;
   setDiscovering: (v: boolean) => void;
   setIngestionResults: (results: IngestionResult[], total: number, summary: Record<string, number>) => void;
+  triggerIngestion: (workspacePath: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -70,4 +71,29 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   setIngestionResults: (results, total, summary) =>
     set({ ingestionResults: results, evidenceCount: total, evidenceSummary: summary }),
+
+  triggerIngestion: async (workspacePath: string) => {
+    set({ isIngesting: true });
+    try {
+      const res = (await window.compass.engine.call("/ingest", {
+        workspace_path: workspacePath,
+      })) as {
+        status: string;
+        total: number;
+        sources: { name: string; type: string; items: number; error?: string }[];
+        summary: Record<string, number>;
+      };
+      if (res.status === "ok") {
+        set({
+          ingestionResults: res.sources,
+          evidenceCount: res.total,
+          evidenceSummary: res.summary,
+        });
+      }
+    } catch (err) {
+      console.error("Auto-ingest failed:", err);
+    } finally {
+      set({ isIngesting: false });
+    }
+  },
 }));
