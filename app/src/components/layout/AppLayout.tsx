@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import CommandPalette from "../search/CommandPalette";
+import FeedbackButton from "../FeedbackButton";
 
 export default function AppLayout() {
   return (
@@ -10,6 +11,7 @@ export default function AppLayout() {
         <Outlet />
       </main>
       <CommandPalette />
+      <FeedbackButton />
     </div>
   );
 }

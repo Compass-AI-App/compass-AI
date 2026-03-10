@@ -629,6 +629,46 @@ def _show_health(compass_dir: Path):
     console.print(table)
 
 
+# --- feedback ---
+
+@app.command()
+def feedback(
+    export: bool = typer.Option(False, "--export", help="Export all feedback as markdown"),
+):
+    """View or export user feedback collected by the Compass app."""
+    import json
+
+    compass_dir = get_compass_dir()
+    feedback_file = compass_dir / "feedback.json"
+
+    if export:
+        # Try app's localStorage feedback (copied to .compass) or direct file
+        if not feedback_file.exists():
+            console.print("[dim]No feedback found. Feedback is collected in the Compass app.[/dim]")
+            return
+
+        entries = json.loads(feedback_file.read_text())
+        if not entries:
+            console.print("[dim]No feedback entries yet.[/dim]")
+            return
+
+        lines = ["# Compass Feedback Export", "", f"Total: {len(entries)} entries", ""]
+        for entry in entries:
+            lines.append(f"## [{entry.get('type', 'general').upper()}] {entry.get('timestamp', 'unknown')}")
+            lines.append("")
+            lines.append(entry.get("message", ""))
+            lines.append("")
+            lines.append(f"_App version: {entry.get('appVersion', 'unknown')}_")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        md = "\n".join(lines)
+        console.print(Markdown(md))
+    else:
+        console.print("[dim]Use [bold]compass feedback --export[/bold] to view all feedback as markdown.[/dim]")
+
+
 # --- demo ---
 
 @app.command()
