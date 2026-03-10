@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import path from "path";
+import { autoUpdater } from "electron-updater";
 import { startEngine, stopEngine, engineFetch } from "./engine-bridge";
 
 let mainWindow: BrowserWindow | null = null;
@@ -40,6 +41,12 @@ app.whenReady().then(async () => {
     await startEngine();
   } catch (err) {
     console.error("[main] Failed to start engine:", err);
+  }
+
+  // Auto-updater: check for updates in packaged builds
+  if (app.isPackaged) {
+    autoUpdater.logger = console;
+    autoUpdater.checkForUpdatesAndNotify();
   }
 });
 

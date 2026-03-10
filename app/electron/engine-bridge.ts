@@ -5,6 +5,7 @@
  * polls /health until ready. On quit: kills the child process.
  */
 
+import { app } from "electron";
 import { ChildProcess, spawn } from "child_process";
 import { existsSync } from "fs";
 import path from "path";
@@ -13,18 +14,35 @@ import net from "net";
 let engineProcess: ChildProcess | null = null;
 let enginePort: number = 0;
 
-function findPython(): string {
-  const engineVenv = path.resolve(__dirname, "../../engine/.venv/bin/python");
-  if (existsSync(engineVenv)) return engineVenv;
+const isPackaged = app.isPackaged;
 
-  const candidates = [
-    path.resolve(__dirname, "../../engine/.venv/bin/python3"),
-    "python3",
-    "python",
-  ];
+/**
+ * Returns the engine directory — either the bundled sidecar resource
+ * (in a packaged .dmg) or the local development path.
+ */
+function getEngineDir(): string {
+  if (isPackaged) {
+    return path.join(process.resourcesPath, "engine");
+  }
+  return path.resolve(__dirname, "../../engine");
+}
+
+function findPython(): string {
+  const engineDir = getEngineDir();
+
+  // In development, prefer the local venv
+  if (!isPackaged) {
+    const venvPython = path.join(engineDir, ".venv/bin/python");
+    if (existsSync(venvPython)) return venvPython;
+
+    const venvPython3 = path.join(engineDir, ".venv/bin/python3");
+    if (existsSync(venvPython3)) return venvPython3;
+  }
+
+  // Packaged app or fallback: use system Python
+  const candidates = ["python3", "python"];
   for (const c of candidates) {
-    if (c.startsWith("/") && existsSync(c)) return c;
-    if (!c.startsWith("/")) return c; // rely on PATH
+    return c; // rely on PATH
   }
   return "python3";
 }
@@ -68,7 +86,7 @@ export async function startEngine(): Promise<number> {
 
   console.log(`[engine-bridge] Starting engine: ${python} -m compass.server ${enginePort}`);
 
-  const engineDir = path.resolve(__dirname, "../../engine");
+  const engineDir = getEngineDir();
   engineProcess = spawn(python, ["-m", "compass.server", String(enginePort)], {
     cwd: engineDir,
     stdio: ["ignore", "pipe", "pipe"],

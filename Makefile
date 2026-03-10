@@ -1,4 +1,4 @@
-.PHONY: setup dev engine demo clean
+.PHONY: setup dev engine demo clean build-mac
 
 setup: setup-engine setup-app
 
@@ -17,6 +17,9 @@ engine:
 demo:
 	cd demo && bash run_demo.sh
 
+build-mac: setup
+	cd app && npm run build:mac
+
 clean:
 	rm -rf engine/.venv engine/*.egg-info
-	rm -rf app/node_modules app/dist app/dist-electron
+	rm -rf app/node_modules app/dist app/dist-electron app/release
