@@ -31,6 +31,7 @@ interface WorkspaceState {
   setDiscovering: (v: boolean) => void;
   setIngestionResults: (results: IngestionResult[], total: number, summary: Record<string, number>) => void;
   triggerIngestion: (workspacePath: string) => Promise<void>;
+  switchWorkspace: (path: string, name: string, description?: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -71,6 +72,51 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   setIngestionResults: (results, total, summary) =>
     set({ ingestionResults: results, evidenceCount: total, evidenceSummary: summary }),
+
+  switchWorkspace: async (path: string, name: string, description = "") => {
+    // Clear current state
+    set({
+      workspacePath: path,
+      productName: name,
+      productDescription: description,
+      sources: [],
+      evidenceCount: 0,
+      evidenceSummary: {},
+      ingestionResults: [],
+      isIngesting: false,
+    });
+
+    // Load workspace info from engine
+    try {
+      const info = (await window.compass.engine.call("/workspace/info", {
+        workspace_path: path,
+      })) as {
+        status: string;
+        sources: Array<{ type: string; name: string; path?: string }>;
+        evidence_count: number;
+      };
+      if (info.status === "ok") {
+        set({
+          sources: info.sources.map((s) => ({
+            type: s.type,
+            name: s.name,
+            path: s.path ?? null,
+            url: null,
+            options: {},
+          })),
+        });
+        if (info.evidence_count > 0) {
+          set({ evidenceCount: info.evidence_count });
+        } else if (info.sources.length > 0) {
+          // Auto-ingest if sources exist but no evidence
+          const { triggerIngestion } = useWorkspaceStore.getState();
+          triggerIngestion(path);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load workspace info:", err);
+    }
+  },
 
   triggerIngestion: async (workspacePath: string) => {
     set({ isIngesting: true });
