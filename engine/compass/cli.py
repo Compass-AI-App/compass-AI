@@ -795,6 +795,103 @@ def _find_demo_data() -> Path | None:
     return None
 
 
+# --- mcp ---
+
+mcp_app = typer.Typer(help="MCP server management")
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.callback(invoke_without_command=True)
+def mcp_config(ctx: typer.Context):
+    """Print MCP server configuration JSON (for manual setup)."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    import json
+    import sys
+
+    compass_path = _find_compass_executable()
+    config = {
+        "mcpServers": {
+            "compass": {
+                "command": compass_path,
+                "args": ["mcp", "serve"],
+            }
+        }
+    }
+    console.print(json.dumps(config, indent=2))
+    console.print(f"\n[dim]Add this to your Claude Code or Cursor MCP config.[/dim]")
+    console.print(f"[dim]Or run: compass mcp install[/dim]")
+
+
+@mcp_app.command()
+def serve():
+    """Start the MCP server (stdio transport)."""
+    from compass.mcp_server import main
+    main()
+
+
+@mcp_app.command()
+def install():
+    """Auto-install Compass MCP server into Claude Code or Cursor config."""
+    import json
+
+    compass_path = _find_compass_executable()
+    server_config = {
+        "command": compass_path,
+        "args": ["mcp", "serve"],
+    }
+
+    installed = False
+
+    # Claude Code config
+    claude_config_path = Path.home() / ".claude" / "claude_code_config.json"
+    if claude_config_path.parent.exists():
+        config = {}
+        if claude_config_path.exists():
+            try:
+                config = json.loads(claude_config_path.read_text())
+            except Exception:
+                config = {}
+
+        mcp_servers = config.setdefault("mcpServers", {})
+        mcp_servers["compass"] = server_config
+        claude_config_path.write_text(json.dumps(config, indent=2))
+        console.print(f"[green]Installed Compass MCP server in Claude Code[/green]")
+        console.print(f"  [dim]{claude_config_path}[/dim]")
+        installed = True
+
+    # Cursor config
+    cursor_config_path = Path.cwd() / ".cursor" / "mcp.json"
+    if cursor_config_path.parent.exists():
+        config = {}
+        if cursor_config_path.exists():
+            try:
+                config = json.loads(cursor_config_path.read_text())
+            except Exception:
+                config = {}
+
+        mcp_servers = config.setdefault("mcpServers", {})
+        mcp_servers["compass"] = server_config
+        cursor_config_path.write_text(json.dumps(config, indent=2))
+        console.print(f"[green]Installed Compass MCP server in Cursor[/green]")
+        console.print(f"  [dim]{cursor_config_path}[/dim]")
+        installed = True
+
+    if not installed:
+        console.print("[yellow]No Claude Code or Cursor config directory found.[/yellow]")
+        console.print("Run [bold]compass mcp[/bold] to get the config JSON for manual setup.")
+    else:
+        console.print(f"\n[dim]Restart your AI tool to activate Compass tools.[/dim]")
+
+
+def _find_compass_executable() -> str:
+    """Find the compass executable path."""
+    import shutil
+    path = shutil.which("compass")
+    return path or "compass"
+
+
 # --- helpers ---
 
 def _load_knowledge_graph(compass_dir: Path):
