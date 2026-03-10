@@ -937,6 +937,124 @@ def _find_demo_data() -> Path | None:
     return None
 
 
+# --- cloud auth ---
+
+CLOUD_TOKEN_KEY = "compass-cloud-token"
+CLOUD_URL_DEFAULT = "https://api.compass.dev"
+
+
+def _get_cloud_url() -> str:
+    import os
+    return os.environ.get("COMPASS_CLOUD_URL", CLOUD_URL_DEFAULT)
+
+
+def _save_cloud_token(token: str) -> None:
+    token_file = Path.home() / ".compass" / "cloud_token"
+    token_file.parent.mkdir(parents=True, exist_ok=True)
+    token_file.write_text(token)
+
+
+def _load_cloud_token() -> str | None:
+    token_file = Path.home() / ".compass" / "cloud_token"
+    if token_file.exists():
+        return token_file.read_text().strip()
+    import os
+    return os.environ.get("COMPASS_AUTH_TOKEN")
+
+
+@app.command()
+def login(
+    email: str = typer.Option(..., prompt=True),
+    password: str = typer.Option(..., prompt=True, hide_input=True),
+):
+    """Log in to Compass Cloud."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    url = f"{_get_cloud_url()}/auth/login"
+    payload = json.dumps({"email": email, "password": password}).encode()
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+            _save_cloud_token(data["token"])
+            console.print(f"[green]Logged in as {data['email']} ({data['plan']} plan)[/green]")
+    except urllib.error.HTTPError as e:
+        body = json.loads(e.read().decode()) if e.fp else {}
+        console.print(f"[red]Login failed: {body.get('detail', 'Unknown error')}[/red]")
+    except Exception as e:
+        console.print(f"[red]Connection error: {e}[/red]")
+
+
+@app.command()
+def signup(
+    email: str = typer.Option(..., prompt=True),
+    password: str = typer.Option(..., prompt=True, hide_input=True, confirmation_prompt=True),
+):
+    """Create a Compass Cloud account."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    url = f"{_get_cloud_url()}/auth/signup"
+    payload = json.dumps({"email": email, "password": password}).encode()
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+            _save_cloud_token(data["token"])
+            console.print(f"[green]Account created! Logged in as {data['email']} (free plan, 50k tokens/month)[/green]")
+    except urllib.error.HTTPError as e:
+        body = json.loads(e.read().decode()) if e.fp else {}
+        console.print(f"[red]Signup failed: {body.get('detail', 'Unknown error')}[/red]")
+    except Exception as e:
+        console.print(f"[red]Connection error: {e}[/red]")
+
+
+@app.command()
+def whoami():
+    """Show current Compass Cloud account info."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    token = _load_cloud_token()
+    if not token:
+        console.print("[dim]Not logged in. Run: compass login[/dim]")
+        return
+
+    url = f"{_get_cloud_url()}/auth/me"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+            console.print(f"Email: [bold]{data['email']}[/bold]")
+            console.print(f"Plan:  {data['plan']}")
+            limit = data.get('token_limit', 0)
+            usage = data.get('token_usage_month', 0)
+            if limit > 0:
+                console.print(f"Usage: {usage:,} / {limit:,} tokens this month")
+            else:
+                console.print(f"Usage: {usage:,} tokens (unlimited)")
+    except urllib.error.HTTPError:
+        console.print("[red]Session expired. Run: compass login[/red]")
+    except Exception as e:
+        console.print(f"[red]Connection error: {e}[/red]")
+
+
+@app.command()
+def logout():
+    """Log out of Compass Cloud."""
+    token_file = Path.home() / ".compass" / "cloud_token"
+    if token_file.exists():
+        token_file.unlink()
+    console.print("[dim]Logged out.[/dim]")
+
+
 # --- mcp ---
 
 mcp_app = typer.Typer(help="MCP server management")

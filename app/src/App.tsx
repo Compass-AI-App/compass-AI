@@ -9,6 +9,7 @@ import DiscoverPage from "./pages/DiscoverPage";
 import ChatPage from "./pages/ChatPage";
 import SettingsPage from "./pages/SettingsPage";
 import OnboardingPage, { isOnboardingComplete } from "./pages/OnboardingPage";
+import LoginPage from "./pages/LoginPage";
 import { useSettingsStore } from "./stores/settings";
 
 function AppWithStartup() {
@@ -29,6 +30,7 @@ function AppWithStartup() {
   return (
     <Routes>
       <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<Navigate to={needsOnboarding ? "/onboarding" : "/workspace"} replace />} />
         <Route path="/workspace" element={<WorkspacePage />} />

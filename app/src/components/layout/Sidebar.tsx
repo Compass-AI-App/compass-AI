@@ -12,6 +12,7 @@ import {
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { useSettingsStore } from "../../stores/settings";
+import { useNavigate } from "react-router-dom";
 
 const navItems = [
   { to: "/workspace", icon: Home, label: "Workspace" },
@@ -33,6 +34,7 @@ export default function Sidebar() {
   const productName = useWorkspaceStore((s) => s.productName);
   const tokenUsage = useSettingsStore((s) => s.tokenUsage);
   const fetchUsage = useSettingsStore((s) => s.fetchUsage);
+  const provider = useSettingsStore((s) => s.provider);
 
   useEffect(() => {
     let cancelled = false;
