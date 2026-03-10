@@ -296,6 +296,7 @@ def reconcile(req: WorkspaceRequest):
             "source_a_evidence": c.source_a_evidence,
             "source_b_evidence": c.source_b_evidence,
             "recommendation": c.recommendation,
+            "signal_strength": c.signal_strength,
         })
 
     output_dir = get_output_dir(base)
@@ -579,6 +580,7 @@ def reconcile_stream(req: WorkspaceRequest):
                 "source_a_evidence": c.source_a_evidence,
                 "source_b_evidence": c.source_b_evidence,
                 "recommendation": c.recommendation,
+                "signal_strength": c.signal_strength,
             })
 
         yield _sse_event("result", {"count": len(conflicts), "conflicts": conflicts})
