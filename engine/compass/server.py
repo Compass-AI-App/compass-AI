@@ -202,6 +202,54 @@ def ingest(req: WorkspaceRequest):
     return {"status": "ok", "total": total, "sources": results, "summary": summary}
 
 
+# ---------- Refresh ----------
+
+class RefreshRequest(BaseModel):
+    workspace_path: str
+    source_name: str = ""  # empty = refresh all
+
+
+@app.post("/refresh")
+def refresh(req: RefreshRequest):
+    global _kg, _kg_workspace_path
+    from datetime import datetime
+
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    compass_dir = get_compass_dir(base)
+
+    if not _kg or _kg_workspace_path != req.workspace_path:
+        _kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+        _kg_workspace_path = req.workspace_path
+
+    sources_to_refresh = config.sources
+    if req.source_name:
+        sources_to_refresh = [s for s in config.sources if s.name == req.source_name]
+        if not sources_to_refresh:
+            raise HTTPException(404, f"Source '{req.source_name}' not found")
+
+    results = []
+    for source in sources_to_refresh:
+        try:
+            removed = _kg.remove_by_connector(source.name)
+            if removed == 0:
+                removed = _kg.remove_by_connector(source.type)
+
+            connector_cls = get_connector(source.type)
+            connector = connector_cls(source)
+            evidence = connector.ingest()
+            now = datetime.now()
+            for ev in evidence:
+                ev.source_name = source.name
+                ev.ingested_at = now
+            _kg.add_many(evidence)
+            results.append({"name": source.name, "removed": removed, "added": len(evidence)})
+        except Exception as e:
+            results.append({"name": source.name, "removed": 0, "added": 0, "error": str(e)})
+
+    return {"status": "ok", "total": len(_kg), "sources": results}
+
+
 # ---------- Evidence ----------
 
 @app.post("/evidence")

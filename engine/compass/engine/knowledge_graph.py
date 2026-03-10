@@ -113,6 +113,27 @@ class KnowledgeGraph:
                 result[source_type] = evidence
         return result
 
+    def remove_by_connector(self, connector_name: str) -> int:
+        """Remove all evidence from a specific connector. Returns count removed."""
+        to_remove = [e for e in self._store.items if e.connector == connector_name]
+        if not to_remove:
+            # Also try matching by source_name
+            to_remove = [e for e in self._store.items if e.source_name == connector_name]
+        if not to_remove:
+            return 0
+
+        remove_ids = {e.id for e in to_remove}
+        self._store.items = [e for e in self._store.items if e.id not in remove_ids]
+
+        # Remove from ChromaDB
+        try:
+            self._collection.delete(ids=list(remove_ids))
+        except Exception:
+            pass
+
+        self._save_store()
+        return len(remove_ids)
+
     def clear(self) -> None:
         """Clear all evidence."""
         self._client.delete_collection("product_evidence")
@@ -154,7 +175,7 @@ class KnowledgeGraph:
     @staticmethod
     def _evidence_to_dict(e: Evidence) -> dict:
         """Convert Evidence to a JSON-serializable dict."""
-        return {
+        d = {
             "id": e.id,
             "source_type": e.source_type.value,
             "connector": e.connector,
@@ -163,16 +184,23 @@ class KnowledgeGraph:
             "metadata": e.metadata,
             "timestamp": e.timestamp.isoformat() if isinstance(e.timestamp, datetime) else str(e.timestamp),
         }
+        if e.ingested_at:
+            d["ingested_at"] = e.ingested_at.isoformat() if isinstance(e.ingested_at, datetime) else str(e.ingested_at)
+        if e.source_name:
+            d["source_name"] = e.source_name
+        return d
 
     @staticmethod
     def _dict_to_evidence(d: dict) -> Evidence:
         """Reconstruct Evidence from a dict."""
-        timestamp = d.get("timestamp")
-        if isinstance(timestamp, str):
-            try:
-                timestamp = datetime.fromisoformat(timestamp)
-            except (ValueError, TypeError):
-                timestamp = datetime.now()
+        def _parse_dt(val):
+            if isinstance(val, str):
+                try:
+                    return datetime.fromisoformat(val)
+                except (ValueError, TypeError):
+                    return datetime.now()
+            return val or datetime.now()
+
         return Evidence(
             id=d["id"],
             source_type=SourceType(d["source_type"]),
@@ -180,7 +208,9 @@ class KnowledgeGraph:
             title=d["title"],
             content=d["content"],
             metadata=d.get("metadata", {}),
-            timestamp=timestamp or datetime.now(),
+            timestamp=_parse_dt(d.get("timestamp")),
+            ingested_at=_parse_dt(d.get("ingested_at")),
+            source_name=d.get("source_name", ""),
         )
 
     def __len__(self) -> int:

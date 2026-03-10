@@ -309,6 +309,63 @@ def specify(
     console.print(f"\n[dim]Spec saved to {spec_path}[/dim]")
 
 
+# --- refresh ---
+
+@app.command()
+def refresh(
+    source_name: str = typer.Argument(None, help="Source name to refresh (e.g. 'github:my-repo'). Refreshes all if omitted."),
+):
+    """Re-ingest evidence from one source (or all), replacing old data."""
+    config = load_config()
+
+    if not config.sources:
+        console.print("[yellow]No sources connected. Run 'compass connect' first.[/yellow]")
+        raise typer.Exit(1)
+
+    from compass.connectors import get_connector
+    from compass.engine.knowledge_graph import KnowledgeGraph
+    from datetime import datetime
+
+    compass_dir = get_compass_dir()
+    kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+
+    sources_to_refresh = config.sources
+    if source_name:
+        sources_to_refresh = [s for s in config.sources if s.name == source_name]
+        if not sources_to_refresh:
+            console.print(f"[red]Source '{source_name}' not found. Available: {', '.join(s.name for s in config.sources)}[/red]")
+            raise typer.Exit(1)
+
+    table = Table(title="Refresh Results")
+    table.add_column("Source", style="bold")
+    table.add_column("Removed", justify="right")
+    table.add_column("Added", justify="right")
+
+    for source in sources_to_refresh:
+        try:
+            # Remove old evidence from this source
+            removed = kg.remove_by_connector(source.name)
+            if removed == 0:
+                # Try connector type as fallback
+                removed = kg.remove_by_connector(source.type)
+
+            # Re-ingest
+            connector_cls = get_connector(source.type)
+            connector = connector_cls(source)
+            evidence = connector.ingest()
+            now = datetime.now()
+            for ev in evidence:
+                ev.source_name = source.name
+                ev.ingested_at = now
+            kg.add_many(evidence)
+            table.add_row(source.name, str(removed), str(len(evidence)))
+        except Exception as e:
+            table.add_row(source.name, "?", f"[red]Error: {e}[/red]")
+
+    console.print(table)
+    console.print(f"\n[bold green]Refresh complete. Total evidence: {len(kg)}[/bold green]")
+
+
 # --- ask ---
 
 ASK_SYSTEM = """You are Compass, an AI product discovery assistant. You answer questions about
