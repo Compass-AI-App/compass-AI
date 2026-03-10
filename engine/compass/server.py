@@ -411,9 +411,14 @@ def specify(req: SpecifyRequest):
 # ---------- Chat ----------
 
 CHAT_SYSTEM = """You are Compass, an AI product discovery assistant.
-Answer the user's question based ONLY on the evidence provided below.
+Answer the user's question based on the evidence provided below.
 When citing evidence, use [source_type:title] format.
 If the evidence doesn't contain enough information, say so clearly."""
+
+CHAT_SYSTEM_NO_EVIDENCE = """You are Compass, an AI product discovery assistant.
+You help product managers with product strategy, discovery, and decision-making.
+The user hasn't ingested any evidence yet, so answer based on your general knowledge.
+Suggest they connect sources (code, docs, analytics, interviews) for grounded insights."""
 
 AGENT_MODE_PROMPTS = {
     "default": CHAT_SYSTEM,
@@ -432,44 +437,68 @@ Ground everything in the evidence provided.""",
 }
 
 
-def _get_chat_system(agent_mode: str) -> str:
+def _get_chat_system(agent_mode: str, has_evidence: bool = True) -> str:
+    if not has_evidence:
+        return CHAT_SYSTEM_NO_EVIDENCE
     return AGENT_MODE_PROMPTS.get(agent_mode, CHAT_SYSTEM)
 
 
-@app.post("/chat")
-def chat(req: ChatRequest):
-    kg = _get_kg(req.workspace_path)
-    orch = get_orchestrator()
+def _try_get_kg(workspace_path: str) -> "KnowledgeGraph | None":
+    """Try to load the knowledge graph, returning None if unavailable."""
+    try:
+        return _get_kg(workspace_path)
+    except (HTTPException, FileNotFoundError, Exception):
+        return None
 
-    relevant = kg.query(req.message, n_results=8)
 
-    evidence_context = "\n\n".join(
-        f"[{e.source_type.value}:{e.connector}] {e.title}\n{e.content}"
-        for e in relevant
-    )
-
-    citations = [
-        {"id": e.id, "title": e.title, "source_type": e.source_type.value}
-        for e in relevant
-    ]
-
+def _build_chat_prompt(
+    message: str, history: list[dict], evidence_context: str
+) -> str:
     history_text = ""
-    for msg in req.history[-6:]:
+    for msg in history[-6:]:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         history_text += f"\n{role.upper()}: {content}"
 
-    prompt = f"""Based on the following evidence from the product workspace:
+    if evidence_context:
+        return f"""Based on the following evidence from the product workspace:
 
 {evidence_context}
 
 {f"Conversation history:{history_text}" if history_text else ""}
 
-USER QUESTION: {req.message}
+USER QUESTION: {message}
 
 Provide a helpful, evidence-grounded answer. Cite specific evidence using [source_type:title] format."""
+    else:
+        return f"""{f"Conversation history:{history_text}" if history_text else ""}
 
-    system = _get_chat_system(req.agent_mode)
+USER QUESTION: {message}
+
+Provide a helpful answer."""
+
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    orch = get_orchestrator()
+    kg = _try_get_kg(req.workspace_path)
+
+    evidence_context = ""
+    citations: list[dict] = []
+
+    if kg:
+        relevant = kg.query(req.message, n_results=8)
+        evidence_context = "\n\n".join(
+            f"[{e.source_type.value}:{e.connector}] {e.title}\n{e.content}"
+            for e in relevant
+        )
+        citations = [
+            {"id": e.id, "title": e.title, "source_type": e.source_type.value}
+            for e in relevant
+        ]
+
+    prompt = _build_chat_prompt(req.message, req.history, evidence_context)
+    system = _get_chat_system(req.agent_mode, has_evidence=bool(kg))
     response = orch.ask(prompt, system=system)
 
     return {
@@ -481,40 +510,28 @@ Provide a helpful, evidence-grounded answer. Cite specific evidence using [sourc
 
 @app.post("/chat/stream")
 def chat_stream(req: ChatRequest):
-    kg = _get_kg(req.workspace_path)
     orch = get_orchestrator()
+    kg = _try_get_kg(req.workspace_path)
 
-    relevant = kg.query(req.message, n_results=8)
+    evidence_context = ""
+    citations: list[dict] = []
 
-    evidence_context = "\n\n".join(
-        f"[{e.source_type.value}:{e.connector}] {e.title}\n{e.content}"
-        for e in relevant
-    )
+    if kg:
+        relevant = kg.query(req.message, n_results=8)
+        evidence_context = "\n\n".join(
+            f"[{e.source_type.value}:{e.connector}] {e.title}\n{e.content}"
+            for e in relevant
+        )
+        citations = [
+            {"id": e.id, "title": e.title, "source_type": e.source_type.value}
+            for e in relevant
+        ]
 
-    citations = [
-        {"id": e.id, "title": e.title, "source_type": e.source_type.value}
-        for e in relevant
-    ]
-
-    history_text = ""
-    for msg in req.history[-6:]:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        history_text += f"\n{role.upper()}: {content}"
-
-    prompt = f"""Based on the following evidence from the product workspace:
-
-{evidence_context}
-
-{f"Conversation history:{history_text}" if history_text else ""}
-
-USER QUESTION: {req.message}
-
-Provide a helpful, evidence-grounded answer. Cite specific evidence using [source_type:title] format."""
+    prompt = _build_chat_prompt(req.message, req.history, evidence_context)
 
     def generate():
         yield _sse_event("citations", {"citations": citations})
-        system = _get_chat_system(req.agent_mode)
+        system = _get_chat_system(req.agent_mode, has_evidence=bool(kg))
         for token in orch.ask_stream(prompt, system=system):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
