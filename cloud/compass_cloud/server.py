@@ -11,6 +11,7 @@ from compass_cloud.models import (
 )
 from compass_cloud import auth
 from compass_cloud.proxy import router as proxy_router
+from compass_cloud.billing import router as billing_router
 
 app = FastAPI(
     title="Compass Cloud",
@@ -19,6 +20,7 @@ app = FastAPI(
 )
 
 app.include_router(proxy_router)
+app.include_router(billing_router)
 
 
 def _get_current_user(authorization: str = Header(...)):
