@@ -24,6 +24,6 @@
 
 ## LLM Provider
 
-- Default: `COMPASS_LLM_PROVIDER=taskforce` with Spotify's Hendrix gateway
+- Default: `COMPASS_LLM_PROVIDER=anthropic` (direct Anthropic API)
 - Config in `engine/.env` (gitignored)
-- Supported providers: `anthropic`, `taskforce`, `cloud`
+- Supported providers: `anthropic`, `cloud`
