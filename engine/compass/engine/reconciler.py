@@ -121,7 +121,6 @@ def _format_evidence(items: list[Evidence], max_items: int = 15) -> str:
     from datetime import datetime, timedelta
 
     lines = []
-    stale_threshold = datetime.now() - timedelta(days=7)
     for item in items[:max_items]:
         content_preview = item.content[:500] + "..." if len(item.content) > 500 else item.content
         freshness = ""

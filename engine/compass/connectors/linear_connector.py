@@ -178,9 +178,9 @@ class LinearConnector(Connector):
         labels_raw = raw.get("labels", {})
         labels = []
         if isinstance(labels_raw, dict) and "nodes" in labels_raw:
-            labels = [l.get("name", "") for l in labels_raw["nodes"] if isinstance(l, dict)]
+            labels = [lb.get("name", "") for lb in labels_raw["nodes"] if isinstance(lb, dict)]
         elif isinstance(labels_raw, list):
-            labels = [l.get("name", l) if isinstance(l, dict) else str(l) for l in labels_raw]
+            labels = [lb.get("name", lb) if isinstance(lb, dict) else str(lb) for lb in labels_raw]
 
         comments_raw = raw.get("comments", {})
         comments = []
