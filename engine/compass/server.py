@@ -525,23 +525,17 @@ def discover_stream(req: WorkspaceRequest):
 # ---------- Helpers ----------
 
 def _get_kg(workspace_path: str) -> KnowledgeGraph:
+    """Get the knowledge graph, loading from persistence (no re-ingestion)."""
     global _kg
     if _kg and len(_kg) > 0:
         return _kg
 
     base = Path(workspace_path)
-    config = load_config(base)
     compass_dir = get_compass_dir(base)
     _kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
 
-    for source in config.sources:
-        try:
-            connector_cls = get_connector(source.type)
-            connector = connector_cls(source)
-            evidence = connector.ingest()
-            _kg.store.add_many(evidence)
-        except Exception:
-            continue
+    if len(_kg) == 0:
+        raise HTTPException(400, "No evidence ingested. Run ingest first.")
 
     return _kg
 

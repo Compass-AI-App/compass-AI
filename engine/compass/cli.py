@@ -347,37 +347,29 @@ def status():
 # --- helpers ---
 
 def _load_knowledge_graph(compass_dir: Path):
-    """Load the knowledge graph from a previous ingestion."""
+    """Load the knowledge graph from persistence (no re-ingestion)."""
     from compass.engine.knowledge_graph import KnowledgeGraph
-    from compass.connectors import get_connector
 
     kg_dir = compass_dir / "knowledge"
-
-    # Re-ingest from sources (ChromaDB persists embeddings but we need the EvidenceStore)
-    config = load_config()
     kg = KnowledgeGraph(persist_dir=kg_dir)
+
+    # KG loaded from persistence — if it has evidence, return it
+    if len(kg) > 0:
+        return kg
+
+    # Persistence is empty — check if sources exist for a helpful message
+    try:
+        config = load_config()
+    except FileNotFoundError:
+        console.print("[yellow]No Compass workspace found. Run 'compass init' first.[/yellow]")
+        return None
 
     if not config.sources:
         console.print("[yellow]No sources connected. Run 'compass connect' first.[/yellow]")
         return None
 
-    # Re-populate the in-memory store from connectors
-    total = 0
-    for source in config.sources:
-        try:
-            connector_cls = get_connector(source.type)
-            connector = connector_cls(source)
-            evidence = connector.ingest()
-            kg.store.add_many(evidence)
-            total += len(evidence)
-        except Exception:
-            continue
-
-    if total == 0:
-        console.print("[yellow]No evidence found. Run 'compass ingest' first.[/yellow]")
-        return None
-
-    return kg
+    console.print("[yellow]No evidence found. Run 'compass ingest' first.[/yellow]")
+    return None
 
 
 def _save_conflict_report(report, path: Path):
