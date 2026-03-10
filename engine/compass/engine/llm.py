@@ -6,6 +6,8 @@ Preserves the existing ask()/ask_json() signatures so downstream code is unchang
 
 from __future__ import annotations
 
+from typing import Generator
+
 from compass.engine.orchestrator import get_orchestrator
 
 
@@ -25,3 +27,12 @@ def ask_json(
     max_tokens: int = 4096,
 ) -> dict | list:
     return get_orchestrator().ask_json(prompt, system, model, max_tokens)
+
+
+def ask_stream(
+    prompt: str,
+    system: str = "",
+    model: str = "claude-sonnet-4-20250514",
+    max_tokens: int = 4096,
+) -> Generator[str, None, None]:
+    return get_orchestrator().ask_stream(prompt, system, model, max_tokens)

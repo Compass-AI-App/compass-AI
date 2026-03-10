@@ -303,6 +303,144 @@ def specify(
     console.print(f"\n[dim]Spec saved to {spec_path}[/dim]")
 
 
+# --- ask ---
+
+ASK_SYSTEM = """You are Compass, an AI product discovery assistant. You answer questions about
+the user's product based on ingested evidence from four sources of truth:
+- Code (technical reality), Docs (strategy & specs), Data (metrics & usage), Judgment (user feedback)
+
+Rules:
+1. Ground every claim in specific evidence. Cite evidence titles in [brackets].
+2. If the evidence doesn't support an answer, say so — don't speculate.
+3. When sources disagree, highlight the conflict explicitly.
+4. Be concise but thorough. PMs need actionable answers, not essays."""
+
+ASK_PROMPT = """## Question
+{question}
+
+## Relevant Evidence
+{evidence}
+
+## Instructions
+Answer the question using only the evidence above. Cite specific evidence items by title
+in [brackets]. If sources disagree, highlight the conflict. If evidence is insufficient,
+say what's missing."""
+
+
+@app.command()
+def ask(
+    question: str = typer.Argument(None, help="Question to ask about your product"),
+):
+    """Ask a question about your product, grounded in evidence."""
+    config = load_config()
+    compass_dir = get_compass_dir()
+
+    kg = _load_knowledge_graph(compass_dir)
+    if not kg:
+        return
+
+    if question:
+        _ask_single(kg, config, question)
+    else:
+        _ask_interactive(kg, config, compass_dir)
+
+
+def _ask_single(kg, config, question: str):
+    """Handle a single question with streaming response."""
+    from compass.engine.llm import ask_stream
+
+    related = kg.query(question, n_results=10)
+    evidence_lines = []
+    for ev in related:
+        preview = ev.content[:300] + "..." if len(ev.content) > 300 else ev.content
+        evidence_lines.append(f"- [{ev.source_type.value}:{ev.connector}] **{ev.title}**: {preview}")
+    evidence_text = "\n".join(evidence_lines) if evidence_lines else "(no relevant evidence found)"
+
+    prompt = ASK_PROMPT.format(question=question, evidence=evidence_text)
+
+    from rich.live import Live
+    from rich.text import Text
+
+    response_text = ""
+    with Live("", console=console, refresh_per_second=10) as live:
+        for chunk in ask_stream(prompt, system=ASK_SYSTEM, model=config.model):
+            response_text += chunk
+            live.update(Markdown(response_text))
+
+    # Show cited sources
+    if related:
+        console.print("\n[dim]─── Sources ───[/dim]")
+        seen = set()
+        for ev in related:
+            key = f"{ev.source_type.value}:{ev.connector}"
+            if key not in seen:
+                seen.add(key)
+                console.print(f"  [dim]{key} ({len([e for e in related if e.connector == ev.connector])} items)[/dim]")
+
+
+def _ask_interactive(kg, config, compass_dir: Path):
+    """Interactive multi-turn chat mode."""
+    import json
+    from compass.engine.llm import ask_stream
+    from rich.live import Live
+
+    history_path = compass_dir / "chat_history.json"
+    history: list[dict] = []
+    if history_path.exists():
+        try:
+            history = json.loads(history_path.read_text())
+        except Exception:
+            history = []
+
+    console.print(Panel(
+        "[bold]Compass Chat[/bold]\n\n"
+        "Ask questions about your product grounded in evidence.\n"
+        "Type [bold]quit[/bold] or [bold]exit[/bold] to leave.\n"
+        "History is saved between sessions.",
+        border_style="blue",
+    ))
+
+    while True:
+        try:
+            question = console.input("\n[bold blue]You:[/bold blue] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+
+        if not question or question.lower() in ("quit", "exit", "q"):
+            break
+
+        related = kg.query(question, n_results=10)
+        evidence_lines = []
+        for ev in related:
+            preview = ev.content[:300] + "..." if len(ev.content) > 300 else ev.content
+            evidence_lines.append(f"- [{ev.source_type.value}:{ev.connector}] **{ev.title}**: {preview}")
+        evidence_text = "\n".join(evidence_lines) if evidence_lines else "(no relevant evidence found)"
+
+        # Build prompt with recent history for context
+        history_context = ""
+        if history:
+            recent = history[-6:]  # last 3 exchanges
+            history_lines = []
+            for entry in recent:
+                history_lines.append(f"User: {entry['question']}")
+                history_lines.append(f"Assistant: {entry['answer'][:200]}...")
+            history_context = "\n## Recent Conversation\n" + "\n".join(history_lines) + "\n"
+
+        prompt = ASK_PROMPT.format(question=question, evidence=evidence_text)
+        if history_context:
+            prompt = history_context + "\n" + prompt
+
+        console.print()
+        response_text = ""
+        with Live("", console=console, refresh_per_second=10) as live:
+            for chunk in ask_stream(prompt, system=ASK_SYSTEM, model=config.model):
+                response_text += chunk
+                live.update(Markdown(response_text))
+
+        history.append({"question": question, "answer": response_text})
+        history_path.write_text(json.dumps(history, indent=2))
+
+
 # --- status ---
 
 @app.command()
