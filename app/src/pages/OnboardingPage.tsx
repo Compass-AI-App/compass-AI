@@ -44,6 +44,7 @@ export default function OnboardingPage() {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-20250514");
+  const [providerChoice, setProviderChoice] = useState<"byok" | "taskforce">("byok");
   const [connectedSources, setConnectedSources] = useState<string[]>([]);
   const [connecting, setConnecting] = useState(false);
 
@@ -96,7 +97,9 @@ export default function OnboardingPage() {
 
     // Save settings
     setWorkspace(workspacePath, productName, productDesc);
-    if (apiKey) {
+    if (providerChoice === "taskforce") {
+      setProvider("taskforce");
+    } else if (apiKey) {
       setProvider("byok");
       setSettingsApiKey(apiKey);
     }
@@ -219,36 +222,73 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 3: API Key */}
+        {/* Step 3: LLM Provider */}
         {step === 3 && (
           <div>
             <div className="flex items-center gap-3 mb-6">
               <Key className="w-6 h-6 text-compass-accent" />
               <h2 className="text-xl font-semibold text-compass-text">
-                API Key
+                LLM Provider
               </h2>
             </div>
             <p className="text-sm text-neutral-400 mb-4">
-              Compass uses Claude to analyze evidence and generate insights. Enter
-              your Anthropic API key to get started.
+              Compass uses Claude to analyze evidence and generate insights.
+              Choose how to connect.
             </p>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-neutral-400 mb-1">
-                  Anthropic API key
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-ant-..."
-                  className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
-                />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Get one at{" "}
-                  <span className="text-compass-accent">console.anthropic.com</span>
-                </p>
+              {/* Provider toggle */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setProviderChoice("byok")}
+                  className={clsx(
+                    "flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors",
+                    providerChoice === "byok"
+                      ? "border-compass-accent bg-compass-accent/10 text-compass-accent"
+                      : "border-compass-border bg-compass-card text-neutral-400 hover:border-neutral-500"
+                  )}
+                >
+                  Anthropic API Key
+                </button>
+                <button
+                  onClick={() => setProviderChoice("taskforce")}
+                  className={clsx(
+                    "flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors",
+                    providerChoice === "taskforce"
+                      ? "border-compass-accent bg-compass-accent/10 text-compass-accent"
+                      : "border-compass-border bg-compass-card text-neutral-400 hover:border-neutral-500"
+                  )}
+                >
+                  Spotify Taskforce
+                </button>
               </div>
+
+              {providerChoice === "byok" && (
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-1">
+                    Anthropic API key
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-ant-..."
+                    className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Get one at{" "}
+                    <span className="text-compass-accent">console.anthropic.com</span>
+                  </p>
+                </div>
+              )}
+
+              {providerChoice === "taskforce" && (
+                <div className="px-3 py-3 rounded-lg bg-green-500/5 border border-green-500/20">
+                  <p className="text-sm text-green-400">
+                    Taskforce is configured via engine environment. No API key needed here.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm text-neutral-400 mb-1">
                   Model
@@ -273,10 +313,10 @@ export default function OnboardingPage() {
               </button>
               <button
                 onClick={() => setStep(4)}
-                disabled={!apiKey}
+                disabled={providerChoice === "byok" && !apiKey}
                 className={clsx(
                   "inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors",
-                  apiKey
+                  providerChoice === "taskforce" || apiKey
                     ? "bg-compass-accent hover:bg-compass-accent-hover text-white"
                     : "bg-compass-card text-neutral-600 cursor-not-allowed"
                 )}
