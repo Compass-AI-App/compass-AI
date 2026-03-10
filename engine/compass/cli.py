@@ -669,6 +669,108 @@ def feedback(
         console.print("[dim]Use [bold]compass feedback --export[/bold] to view all feedback as markdown.[/dim]")
 
 
+# --- doctor ---
+
+@app.command()
+def doctor(
+    fix: bool = typer.Option(False, "--fix", help="Attempt to auto-fix issues"),
+):
+    """Pre-flight check to diagnose Compass setup issues."""
+    import shutil
+    import sys
+
+    checks_passed = 0
+    checks_failed = 0
+
+    def _check(name: str, passed: bool, fix_hint: str = ""):
+        nonlocal checks_passed, checks_failed
+        if passed:
+            console.print(f"  [green]\u2713[/green] {name}")
+            checks_passed += 1
+        else:
+            msg = f"  [red]\u2717[/red] {name}"
+            if fix_hint:
+                msg += f"  [dim]→ {fix_hint}[/dim]"
+            console.print(msg)
+            checks_failed += 1
+
+    console.print("\n[bold]Compass Doctor[/bold]\n")
+
+    # 1. Python version
+    py_version = sys.version_info
+    _check(
+        f"Python {py_version.major}.{py_version.minor}.{py_version.micro}",
+        py_version >= (3, 11),
+        "Compass requires Python 3.11+",
+    )
+
+    # 2. Workspace exists
+    compass_dir = Path.cwd() / ".compass"
+    workspace_exists = compass_dir.exists()
+    if not workspace_exists and fix:
+        compass_dir.mkdir(exist_ok=True)
+        (compass_dir / "output").mkdir(exist_ok=True)
+        workspace_exists = True
+        console.print("    [dim](created .compass/ directory)[/dim]")
+    _check("Workspace found (.compass/)", workspace_exists, "Run: compass init \"My Product\"")
+
+    # 3. Config file
+    config_file = compass_dir / "compass.yaml"
+    _check("Config file exists", config_file.exists(), "Run: compass init \"My Product\"")
+
+    # 4. Sources connected
+    sources_connected = False
+    source_count = 0
+    if config_file.exists():
+        try:
+            config = load_config()
+            source_count = len(config.sources)
+            sources_connected = source_count > 0
+        except Exception:
+            pass
+    _check(
+        f"Sources connected ({source_count})",
+        sources_connected,
+        "Run: compass connect <type> --path <path>",
+    )
+
+    # 5. Evidence ingested
+    evidence_file = compass_dir / "knowledge" / "evidence_store.json"
+    evidence_ingested = evidence_file.exists()
+    _check("Evidence ingested", evidence_ingested, "Run: compass ingest")
+
+    # 6. API key
+    import os
+    api_key_set = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    _check(
+        "API key configured",
+        api_key_set,
+        "Set ANTHROPIC_API_KEY environment variable",
+    )
+
+    # 7. Engine reachable
+    engine_ok = False
+    try:
+        import urllib.request
+        res = urllib.request.urlopen("http://localhost:9811/health", timeout=2)
+        data = res.read().decode()
+        engine_ok = "ready" in data
+    except Exception:
+        pass
+    _check(
+        "Engine server reachable",
+        engine_ok,
+        "Run: compass server (or start the Compass app)",
+    )
+
+    # Summary
+    console.print()
+    if checks_failed == 0:
+        console.print(f"[green bold]All {checks_passed} checks passed![/green bold]\n")
+    else:
+        console.print(f"[yellow]{checks_passed} passed, {checks_failed} failed[/yellow]\n")
+
+
 # --- demo ---
 
 @app.command()
