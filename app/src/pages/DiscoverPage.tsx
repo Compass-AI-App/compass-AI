@@ -83,6 +83,8 @@ export default function DiscoverPage() {
         <SpecView
           title={activeSpec.title}
           markdown={activeSpec.markdown}
+          cursorMarkdown={activeSpec.cursorMarkdown}
+          claudeCodeMarkdown={activeSpec.claudeCodeMarkdown}
           onClose={() => setActiveSpec(null)}
         />
       )}

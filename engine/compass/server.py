@@ -386,6 +386,8 @@ def specify(req: SpecifyRequest):
         "status": "ok",
         "title": spec.title,
         "markdown": spec.to_markdown(),
+        "cursor_markdown": spec.to_cursor_markdown(),
+        "claude_code_markdown": spec.to_claude_code_markdown(),
         "spec": {
             "title": spec.title,
             "problem_statement": spec.problem_statement,

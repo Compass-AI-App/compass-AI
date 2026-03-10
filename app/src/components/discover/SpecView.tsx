@@ -3,14 +3,24 @@ import { X, Copy, ClipboardCheck, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { clsx } from "clsx";
 
+type CopyState = "none" | "cursor" | "claude" | "full";
+
 interface Props {
   title: string;
   markdown: string;
+  cursorMarkdown?: string;
+  claudeCodeMarkdown?: string;
   onClose: () => void;
 }
 
-export default function SpecView({ title, markdown, onClose }: Props) {
-  const [copied, setCopied] = useState<"none" | "tasks" | "full">("none");
+export default function SpecView({
+  title,
+  markdown,
+  cursorMarkdown,
+  claudeCodeMarkdown,
+  onClose,
+}: Props) {
+  const [copied, setCopied] = useState<CopyState>("none");
 
   function extractAgentTasks(): string {
     const marker = "## Agent Tasks";
@@ -19,7 +29,7 @@ export default function SpecView({ title, markdown, onClose }: Props) {
     return markdown.slice(idx);
   }
 
-  async function copyToClipboard(text: string, which: "tasks" | "full") {
+  async function copyToClipboard(text: string, which: CopyState) {
     await navigator.clipboard.writeText(text);
     setCopied(which);
     setTimeout(() => setCopied("none"), 2000);
@@ -43,20 +53,36 @@ export default function SpecView({ title, markdown, onClose }: Props) {
         <div className="flex items-center gap-3 px-6 py-4 border-b border-compass-border shrink-0">
           <h2 className="text-lg font-semibold text-compass-text flex-1 truncate">{title}</h2>
           <button
-            onClick={() => copyToClipboard(extractAgentTasks(), "tasks")}
+            onClick={() => copyToClipboard(cursorMarkdown || extractAgentTasks(), "cursor")}
             className={clsx(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-              copied === "tasks"
+              copied === "cursor"
                 ? "bg-green-500/20 text-green-400"
                 : "bg-compass-accent hover:bg-compass-accent-hover text-white"
             )}
           >
-            {copied === "tasks" ? (
+            {copied === "cursor" ? (
               <ClipboardCheck className="w-3.5 h-3.5" />
             ) : (
               <Copy className="w-3.5 h-3.5" />
             )}
             Copy for Cursor
+          </button>
+          <button
+            onClick={() => copyToClipboard(claudeCodeMarkdown || markdown, "claude")}
+            className={clsx(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+              copied === "claude"
+                ? "bg-green-500/20 text-green-400"
+                : "bg-orange-600 hover:bg-orange-500 text-white"
+            )}
+          >
+            {copied === "claude" ? (
+              <ClipboardCheck className="w-3.5 h-3.5" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+            Copy for Claude Code
           </button>
           <button
             onClick={() => copyToClipboard(markdown, "full")}
@@ -79,7 +105,7 @@ export default function SpecView({ title, markdown, onClose }: Props) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-compass-border text-compass-muted hover:text-compass-text transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            Save
+            Save .md
           </button>
           <button onClick={onClose} className="text-compass-muted hover:text-compass-text">
             <X className="w-5 h-5" />

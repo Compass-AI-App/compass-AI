@@ -4,12 +4,12 @@ import type { Opportunity, FeatureSpec } from "../types/engine";
 interface OpportunitiesState {
   opportunities: Opportunity[];
   loading: boolean;
-  activeSpec: { title: string; markdown: string; spec: FeatureSpec } | null;
+  activeSpec: { title: string; markdown: string; cursorMarkdown: string; claudeCodeMarkdown: string; spec: FeatureSpec } | null;
   specLoading: boolean;
 
   setOpportunities: (o: Opportunity[]) => void;
   setLoading: (v: boolean) => void;
-  setActiveSpec: (s: { title: string; markdown: string; spec: FeatureSpec } | null) => void;
+  setActiveSpec: (s: { title: string; markdown: string; cursorMarkdown: string; claudeCodeMarkdown: string; spec: FeatureSpec } | null) => void;
   setSpecLoading: (v: boolean) => void;
   runDiscover: (workspacePath: string) => Promise<void>;
   generateSpec: (workspacePath: string, title: string) => Promise<void>;
@@ -49,10 +49,18 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
       const res = (await window.compass.engine.call("/specify", {
         workspace_path: workspacePath,
         opportunity_title: title,
-      })) as { status: string; title: string; markdown: string; spec: FeatureSpec };
+      })) as { status: string; title: string; markdown: string; cursor_markdown: string; claude_code_markdown: string; spec: FeatureSpec };
 
       if (res.status === "ok") {
-        set({ activeSpec: { title: res.title, markdown: res.markdown, spec: res.spec } });
+        set({
+          activeSpec: {
+            title: res.title,
+            markdown: res.markdown,
+            cursorMarkdown: res.cursor_markdown || "",
+            claudeCodeMarkdown: res.claude_code_markdown || "",
+            spec: res.spec,
+          },
+        });
       }
     } catch (err) {
       console.error("Specify failed:", err);
