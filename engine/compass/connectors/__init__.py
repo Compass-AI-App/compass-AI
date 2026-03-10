@@ -6,6 +6,7 @@ from compass.connectors.docs import DocsConnector
 from compass.connectors.analytics import AnalyticsConnector
 from compass.connectors.interviews import InterviewConnector
 from compass.connectors.support import SupportConnector
+from compass.connectors.jira_connector import JiraConnector
 
 CONNECTORS: dict[str, type[Connector]] = {
     "github": GitHubConnector,
@@ -16,6 +17,7 @@ CONNECTORS: dict[str, type[Connector]] = {
     "data": AnalyticsConnector,
     "interviews": InterviewConnector,
     "support": SupportConnector,
+    "jira": JiraConnector,
 }
 
 
@@ -34,6 +36,7 @@ __all__ = [
     "AnalyticsConnector",
     "InterviewConnector",
     "SupportConnector",
+    "JiraConnector",
     "CONNECTORS",
     "get_connector",
 ]
