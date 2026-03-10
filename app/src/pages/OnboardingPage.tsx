@@ -8,6 +8,9 @@ import {
   Check,
   Loader2,
   Shield,
+  ChevronDown,
+  ChevronRight,
+  Zap,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -45,6 +48,7 @@ export default function OnboardingPage() {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-20250514");
+  const [useOwnKey, setUseOwnKey] = useState(false);
   const [connectedSources, setConnectedSources] = useState<string[]>([]);
   const [connecting, setConnecting] = useState(false);
 
@@ -97,9 +101,11 @@ export default function OnboardingPage() {
 
     // Save settings
     setWorkspace(workspacePath, productName, productDesc);
-    if (apiKey) {
+    if (useOwnKey && apiKey) {
       setProvider("byok");
       setSettingsApiKey(apiKey);
+    } else {
+      setProvider("compass");
     }
     setSettingsModel(model);
 
@@ -220,25 +226,61 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 3: LLM Provider */}
+        {/* Step 3: AI Setup */}
         {step === 3 && (
           <div>
             <div className="flex items-center gap-3 mb-6">
-              <Key className="w-6 h-6 text-compass-accent" />
+              <Zap className="w-6 h-6 text-compass-accent" />
               <h2 className="text-xl font-semibold text-compass-text">
-                LLM Provider
+                AI Setup
               </h2>
             </div>
-            <p className="text-sm text-neutral-400 mb-4">
-              Compass uses Claude to analyze evidence and generate insights.
-              Choose how to connect.
-            </p>
-            <div className="space-y-4">
-              <div className="space-y-3">
+
+            {/* Default: Compass-provided */}
+            <div className="rounded-lg border border-compass-accent/30 bg-compass-accent/5 p-4 mb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Compass className="w-4 h-4 text-compass-accent" />
+                <p className="text-sm font-medium text-compass-text">
+                  Powered by Claude
+                </p>
+              </div>
+              <p className="text-xs text-neutral-400">
+                Compass includes AI out of the box. No setup needed — just start using it.
+              </p>
+            </div>
+
+            {/* Model selector */}
+            <div className="mb-4">
+              <label className="block text-sm text-neutral-400 mb-1">
+                Model
+              </label>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm focus:outline-none focus:border-compass-accent"
+              >
+                <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommended)</option>
+                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (faster)</option>
+                <option value="claude-opus-4-6">Claude Opus 4.6 (most capable)</option>
+              </select>
+            </div>
+
+            {/* Optional: BYOK */}
+            <button
+              onClick={() => setUseOwnKey(!useOwnKey)}
+              className="flex items-center gap-2 text-sm text-compass-muted hover:text-compass-text transition-colors mb-3"
+            >
+              {useOwnKey ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+              Use your own Anthropic API key
+            </button>
+
+            {useOwnKey && (
+              <div className="space-y-3 pl-6 border-l-2 border-compass-border">
                 <div>
-                  <label className="block text-sm text-neutral-400 mb-1">
-                    Anthropic API key
-                  </label>
                   <input
                     type="password"
                     value={apiKey}
@@ -255,26 +297,12 @@ export default function OnboardingPage() {
                   <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
                   <p className="text-xs text-neutral-400">
                     Your key is encrypted with your OS keychain and stored locally.
-                    It is sent directly to the Anthropic API — Compass never sees or transmits it elsewhere.
+                    Sent directly to the Anthropic API — never to Compass servers.
                   </p>
                 </div>
               </div>
+            )}
 
-              <div>
-                <label className="block text-sm text-neutral-400 mb-1">
-                  Model
-                </label>
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm focus:outline-none focus:border-compass-accent"
-                >
-                  <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommended)</option>
-                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (faster)</option>
-                  <option value="claude-opus-4-6">Claude Opus 4.6 (most capable)</option>
-                </select>
-              </div>
-            </div>
             <div className="flex justify-between mt-8">
               <button
                 onClick={() => setStep(2)}
@@ -284,10 +312,10 @@ export default function OnboardingPage() {
               </button>
               <button
                 onClick={() => setStep(4)}
-                disabled={!apiKey}
+                disabled={useOwnKey && !apiKey}
                 className={clsx(
                   "inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors",
-                  apiKey
+                  !(useOwnKey && !apiKey)
                     ? "bg-compass-accent hover:bg-compass-accent-hover text-white"
                     : "bg-compass-card text-neutral-600 cursor-not-allowed"
                 )}

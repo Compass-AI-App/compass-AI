@@ -85,13 +85,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const { provider, apiKey, model } = get();
     try {
       await window.compass?.engine.call("/configure", {
-        method: "POST",
-        body: JSON.stringify({
-          api_key: provider === "byok" ? apiKey : "",
-          model,
-          provider: provider === "byok" ? "anthropic" : "cloud",
-        }),
-        headers: { "Content-Type": "application/json" },
+        api_key: provider === "byok" ? apiKey : "",
+        model,
+        provider: provider === "byok" ? "anthropic" : "compass",
       });
     } catch {
       // Engine may not be running yet — ignore silently

@@ -233,6 +233,24 @@ class Orchestrator:
 
         return _extract_json(text)
 
+    def ask_stream(
+        self,
+        prompt: str,
+        system: str = "",
+        model: str = "",
+        max_tokens: int = 4096,
+    ) -> Generator[str, None, None]:
+        gen = self.provider.complete_stream(
+            prompt, system, model or self.default_model, max_tokens
+        )
+        try:
+            while True:
+                yield next(gen)
+        except StopIteration as e:
+            if e.value:
+                inp, out = e.value
+                self.usage.record(inp, out)
+
 
 def _extract_json(text: str) -> dict | list:
     """Extract JSON from LLM output, handling markdown fences and trailing text."""
@@ -274,24 +292,6 @@ def _extract_json(text: str) -> dict | list:
         0,
     )
 
-    def ask_stream(
-        self,
-        prompt: str,
-        system: str = "",
-        model: str = "",
-        max_tokens: int = 4096,
-    ) -> Generator[str, None, None]:
-        gen = self.provider.complete_stream(
-            prompt, system, model or self.default_model, max_tokens
-        )
-        try:
-            while True:
-                yield next(gen)
-        except StopIteration as e:
-            if e.value:
-                inp, out = e.value
-                self.usage.record(inp, out)
-
 
 _instance: Orchestrator | None = None
 
@@ -314,6 +314,11 @@ def configure_orchestrator(
 
     Preserves existing TokenUsage across reconfiguration so session
     totals aren't lost when the user changes settings mid-session.
+
+    Provider modes:
+    - "anthropic": Uses the provided api_key (BYOK mode)
+    - "compass": Uses ANTHROPIC_API_KEY from environment (app-provided mode)
+    - "cloud": Uses Compass Cloud proxy
     """
     global _instance
 
@@ -322,7 +327,11 @@ def configure_orchestrator(
 
     if provider == "cloud":
         llm_provider = CompassCloudProvider()
+    elif provider == "compass":
+        # App-provided mode: use environment key, ignore api_key param
+        llm_provider = AnthropicProvider(base_url=base_url or None)
     else:
+        # BYOK mode: use the user-supplied key
         llm_provider = AnthropicProvider(api_key=api_key or None, base_url=base_url or None)
 
     _instance = Orchestrator(provider=llm_provider, default_model=model)
