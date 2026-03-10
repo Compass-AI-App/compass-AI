@@ -38,6 +38,20 @@ app = typer.Typer(
 )
 console = Console()
 
+# Color-coded source type indicators
+SOURCE_COLORS = {
+    "code": "blue",
+    "docs": "green",
+    "data": "yellow",
+    "judgment": "magenta",
+}
+
+
+def _source_badge(source_type: str) -> str:
+    """Return a color-coded source type badge."""
+    color = SOURCE_COLORS.get(source_type, "white")
+    return f"[{color}][{source_type.upper()}][/{color}]"
+
 
 @app.callback(invoke_without_command=True)
 def main(
@@ -126,6 +140,7 @@ def ingest():
     table.add_column("Items", justify="right")
 
     from datetime import datetime
+    from compass.models.sources import CONNECTOR_SOURCE_MAP
 
     for source in config.sources:
         try:
@@ -139,7 +154,9 @@ def ingest():
             kg.add_many(evidence)
             count = len(evidence)
             total += count
-            table.add_row(source.name, source.type, str(count))
+            source_type = CONNECTOR_SOURCE_MAP.get(source.type, source.type)
+            type_str = _source_badge(source_type.value if hasattr(source_type, 'value') else source_type)
+            table.add_row(source.name, type_str, str(count))
         except Exception as e:
             table.add_row(source.name, source.type, f"[red]Error: {e}[/red]")
 
@@ -175,27 +192,37 @@ def reconcile():
         console.print("[green]No conflicts detected between sources.[/green]")
         return
 
-    # Display conflicts
-    console.print(f"\n[bold]Found {len(report)} conflicts[/bold]\n")
+    high_count = len(report.high)
+    console.print(f"\n[bold]Found {len(report)} conflicts[/bold]"
+                  + (f" ([red]{high_count} high severity[/red])" if high_count else "")
+                  + "\n")
 
     for conflict in report.conflicts:
         severity_color = {"high": "red", "medium": "yellow", "low": "dim"}
         color = severity_color.get(conflict.severity.value, "white")
+        sources = conflict.conflict_type.sources
+        badge_a = _source_badge(sources[0].value)
+        badge_b = _source_badge(sources[1].value)
+        signal = f"  Signal: {conflict.signal_strength} evidence items" if conflict.signal_strength > 0 else ""
 
         console.print(Panel(
             f"[bold]{conflict.title}[/bold]\n\n"
             f"{conflict.description}\n\n"
-            f"[dim]Type: {conflict.conflict_type.description}[/dim]\n"
-            f"[dim]Recommendation: {conflict.recommendation}[/dim]",
+            f"{badge_a} vs {badge_b} — {conflict.conflict_type.description}\n"
+            f"[dim]Recommendation: {conflict.recommendation}[/dim]"
+            f"[dim]{signal}[/dim]",
             title=f"[{color}]{conflict.severity.value.upper()}[/{color}]",
             border_style=color,
         ))
+
+    console.print(f"[dim]Conflicts reveal where your product's sources of truth disagree — "
+                  f"these are where opportunities hide.[/dim]")
 
     # Save report
     output_dir = get_output_dir()
     report_path = output_dir / "conflict-report.md"
     _save_conflict_report(report, report_path)
-    console.print(f"\n[dim]Report saved to {report_path}[/dim]")
+    console.print(f"[dim]Report saved to {report_path}[/dim]")
 
 
 # --- discover ---
@@ -226,17 +253,19 @@ def discover():
         console.print("[yellow]No clear opportunities found. Try adding more evidence sources.[/yellow]")
         return
 
-    console.print(f"\n[bold]Top {len(opportunities)} Opportunities[/bold]\n")
+    console.print(f"\n[bold]Top {len(opportunities)} Opportunities[/bold]")
+    console.print("[dim]Ranked by confidence and impact, grounded in evidence.[/dim]\n")
 
     for opp in opportunities:
         confidence_color = {"high": "green", "medium": "yellow", "low": "dim"}
         color = confidence_color.get(opp.confidence.value, "white")
+        confidence_badge = f"[{color}]{opp.confidence.value.upper()}[/{color}]"
 
         console.print(Panel(
             f"[bold]{opp.description}[/bold]\n\n"
             f"[dim]Evidence:[/dim] {opp.evidence_summary}\n\n"
             f"[dim]Impact:[/dim] {opp.estimated_impact}",
-            title=f"#{opp.rank} [{color}]{opp.confidence.value.upper()} confidence[/{color}]  {opp.title}",
+            title=f"#{opp.rank} {confidence_badge}  {opp.title}",
         ))
 
     # Save opportunities
