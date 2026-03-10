@@ -45,7 +45,6 @@ export default function OnboardingPage() {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-20250514");
-  const [providerChoice, setProviderChoice] = useState<"byok" | "taskforce">("byok");
   const [connectedSources, setConnectedSources] = useState<string[]>([]);
   const [connecting, setConnecting] = useState(false);
 
@@ -98,10 +97,7 @@ export default function OnboardingPage() {
 
     // Save settings
     setWorkspace(workspacePath, productName, productDesc);
-    if (providerChoice === "taskforce") {
-      setProvider("taskforce");
-      if (apiKey) setSettingsApiKey(apiKey);
-    } else if (apiKey) {
+    if (apiKey) {
       setProvider("byok");
       setSettingsApiKey(apiKey);
     }
@@ -238,86 +234,31 @@ export default function OnboardingPage() {
               Choose how to connect.
             </p>
             <div className="space-y-4">
-              {/* Provider toggle */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setProviderChoice("byok")}
-                  className={clsx(
-                    "flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors",
-                    providerChoice === "byok"
-                      ? "border-compass-accent bg-compass-accent/10 text-compass-accent"
-                      : "border-compass-border bg-compass-card text-neutral-400 hover:border-neutral-500"
-                  )}
-                >
-                  Anthropic API Key
-                </button>
-                <button
-                  onClick={() => setProviderChoice("taskforce")}
-                  className={clsx(
-                    "flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors",
-                    providerChoice === "taskforce"
-                      ? "border-compass-accent bg-compass-accent/10 text-compass-accent"
-                      : "border-compass-border bg-compass-card text-neutral-400 hover:border-neutral-500"
-                  )}
-                >
-                  Spotify Taskforce
-                </button>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-1">
+                    Anthropic API key
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-ant-..."
+                    className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Get one at{" "}
+                    <span className="text-compass-accent">console.anthropic.com</span>
+                  </p>
+                </div>
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
+                  <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-neutral-400">
+                    Your key is encrypted with your OS keychain and stored locally.
+                    It is sent directly to the Anthropic API — Compass never sees or transmits it elsewhere.
+                  </p>
+                </div>
               </div>
-
-              {providerChoice === "byok" && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-neutral-400 mb-1">
-                      Anthropic API key
-                    </label>
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-ant-..."
-                      className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
-                    />
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Get one at{" "}
-                      <span className="text-compass-accent">console.anthropic.com</span>
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
-                    <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                    <p className="text-xs text-neutral-400">
-                      Your key is encrypted with your OS keychain and stored locally.
-                      It is sent directly to the Anthropic API — Compass never sees or transmits it elsewhere.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {providerChoice === "taskforce" && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-neutral-400 mb-1">
-                      Taskforce API key
-                    </label>
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="Your Taskforce key..."
-                      className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
-                    />
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Get one from your team's Taskforce admin or the Hendrix GenAI portal.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
-                    <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                    <p className="text-xs text-neutral-400">
-                      Your key is encrypted with your OS keychain and stored locally.
-                      It is sent to Spotify's Hendrix gateway — never to external servers.
-                    </p>
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="block text-sm text-neutral-400 mb-1">

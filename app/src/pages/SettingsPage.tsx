@@ -55,12 +55,6 @@ export default function SettingsPage() {
             active={provider === "byok"}
             onClick={() => setProvider("byok")}
           />
-          <ProviderButton
-            label="Taskforce"
-            description="Spotify corporate access"
-            active={provider === "taskforce"}
-            onClick={() => setProvider("taskforce")}
-          />
         </div>
       </Section>
 

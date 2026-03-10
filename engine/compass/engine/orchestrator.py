@@ -132,89 +132,6 @@ class AnthropicProvider(LLMProvider):
             return (msg.usage.input_tokens, msg.usage.output_tokens)
 
 
-class TaskforceProvider(LLMProvider):
-    """Routes calls through Spotify's Taskforce/Hendrix GenAI gateway (OpenAI-compatible)."""
-
-    DEFAULT_MODEL = "claude-sonnet-4-5"
-    BASE_URL = "https://hendrix-genai.spotify.net/taskforce/anthropic/v1"
-
-    # Anthropic SDK model IDs → Taskforce model names
-    _MODEL_MAP = {
-        "claude-sonnet-4-20250514": "claude-sonnet-4-5",
-        "claude-opus-4-20250514": "claude-opus-4-5",
-        "claude-haiku-4-20250514": "claude-haiku-4-5",
-    }
-
-    def __init__(self, api_key: str | None = None, base_url: str | None = None):
-        self.api_key = api_key or os.environ.get("TASKFORCE_API_KEY", "")
-        if not self.api_key:
-            raise ValueError("TASKFORCE_API_KEY not set.")
-        self.base_url = (base_url or os.environ.get("TASKFORCE_BASE_URL", "")).rstrip("/") or self.BASE_URL
-
-    def _resolve_model(self, model: str) -> str:
-        """Translate Anthropic model IDs to Taskforce-compatible names."""
-        return self._MODEL_MAP.get(model, model) if model else self.DEFAULT_MODEL
-
-    def complete(
-        self,
-        prompt: str,
-        system: str = "",
-        model: str = "",
-        max_tokens: int = 4096,
-    ) -> tuple[str, int, int]:
-        import urllib.request
-        import urllib.error
-
-        url = f"{self.base_url}/chat/completions"
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        else:
-            messages.append({"role": "system", "content": "You are Compass, an AI product discovery assistant."})
-        messages.append({"role": "user", "content": prompt})
-
-        payload = json.dumps({
-            "model": self._resolve_model(model),
-            "max_tokens": max_tokens,
-            "messages": messages,
-        }).encode()
-
-        req = urllib.request.Request(
-            url,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "apikey": self.api_key,
-            },
-            method="POST",
-        )
-
-        last_error: Exception | None = None
-        for attempt in range(3):
-            try:
-                with urllib.request.urlopen(req, timeout=180) as resp:
-                    data = json.loads(resp.read().decode())
-                    text = data["choices"][0]["message"]["content"]
-                    usage = data.get("usage", {})
-                    inp = usage.get("prompt_tokens", 0)
-                    out = usage.get("completion_tokens", 0)
-                    return text, inp, out
-            except urllib.error.HTTPError as e:
-                body = e.read().decode() if e.fp else ""
-                if 400 <= e.code < 500:
-                    raise RuntimeError(f"Taskforce error ({e.code}): {body}") from e
-                last_error = RuntimeError(f"Taskforce error ({e.code}): {body}")
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
-                last_error = RuntimeError(f"Taskforce connection error: {e}")
-
-            if attempt < 2:
-                wait = 2 ** attempt
-                logger.warning("Taskforce request failed (attempt %d/3), retrying in %ds...", attempt + 1, wait)
-                time.sleep(wait)
-
-        raise last_error  # type: ignore[misc]
-
-
 class CompassCloudProvider(LLMProvider):
     """Proxies calls through Compass Cloud API (auth + metering)."""
 
@@ -405,8 +322,6 @@ def configure_orchestrator(
 
     if provider == "cloud":
         llm_provider = CompassCloudProvider()
-    elif provider == "taskforce":
-        llm_provider = TaskforceProvider(api_key=api_key or None, base_url=base_url or None)
     else:
         llm_provider = AnthropicProvider(api_key=api_key or None, base_url=base_url or None)
 
@@ -431,6 +346,4 @@ def _create_default_provider() -> LLMProvider:
     provider_name = os.environ.get("COMPASS_LLM_PROVIDER", "anthropic").lower()
     if provider_name == "cloud":
         return CompassCloudProvider()
-    if provider_name == "taskforce":
-        return TaskforceProvider()
     return AnthropicProvider()
