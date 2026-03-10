@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Home,
@@ -8,11 +8,16 @@ import {
   MessageCircle,
   Settings,
   Compass,
+  ChevronDown,
+  FolderOpen,
+  Plus,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { useSettingsStore } from "../../stores/settings";
+import { useWorkspaceManager } from "../../stores/workspaceManager";
 import { useNavigate } from "react-router-dom";
+import { useChatStore } from "../../stores/chat";
 
 const navItems = [
   { to: "/workspace", icon: Home, label: "Workspace" },
@@ -32,9 +37,33 @@ export default function Sidebar() {
   const engineStatus = useWorkspaceStore((s) => s.engineStatus);
   const setEngineStatus = useWorkspaceStore((s) => s.setEngineStatus);
   const productName = useWorkspaceStore((s) => s.productName);
+  const workspacePath = useWorkspaceStore((s) => s.workspacePath);
+  const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
   const tokenUsage = useSettingsStore((s) => s.tokenUsage);
   const fetchUsage = useSettingsStore((s) => s.fetchUsage);
   const provider = useSettingsStore((s) => s.provider);
+  const { workspaces, loadWorkspaces, loaded, openWorkspace } = useWorkspaceManager();
+  const clearMessages = useChatStore((s) => s.clearMessages);
+  const loadHistory = useChatStore((s) => s.loadHistory);
+  const navigate = useNavigate();
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!loaded) loadWorkspaces();
+  }, [loaded]);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!showPicker) return;
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showPicker]);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,12 +96,62 @@ export default function Sidebar() {
   return (
     <aside className="flex flex-col w-[220px] h-full bg-compass-sidebar border-r border-compass-border select-none">
       {/* Title bar drag region */}
-      <div className="h-12 flex items-center gap-2 px-4 draggable shrink-0"
+      <div className="h-12 flex items-center px-4 draggable shrink-0"
            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}>
-        <Compass className="w-5 h-5 text-compass-accent shrink-0" />
-        <span className="text-sm font-semibold text-compass-text tracking-tight truncate">
-          {productName || "Compass"}
-        </span>
+        <div className="relative flex-1 min-w-0" ref={pickerRef}
+             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+          <button
+            onClick={() => setShowPicker(!showPicker)}
+            className="flex items-center gap-2 w-full text-left hover:bg-white/5 rounded-lg px-1 py-1 transition-colors"
+          >
+            <Compass className="w-5 h-5 text-compass-accent shrink-0" />
+            <span className="text-sm font-semibold text-compass-text tracking-tight truncate flex-1">
+              {productName || "Compass"}
+            </span>
+            <ChevronDown className={clsx("w-3.5 h-3.5 text-compass-muted shrink-0 transition-transform", showPicker && "rotate-180")} />
+          </button>
+
+          {showPicker && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-compass-card border border-compass-border rounded-lg shadow-xl z-50 overflow-hidden">
+              <div className="max-h-48 overflow-y-auto py-1">
+                {workspaces.map((ws) => (
+                  <button
+                    key={ws.id}
+                    onClick={() => {
+                      if (ws.path !== workspacePath) {
+                        clearMessages();
+                        openWorkspace(ws.id);
+                        switchWorkspace(ws.path, ws.name, ws.description);
+                        loadHistory(ws.path);
+                      }
+                      setShowPicker(false);
+                    }}
+                    className={clsx(
+                      "w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
+                      ws.path === workspacePath
+                        ? "bg-compass-accent/10 text-compass-accent"
+                        : "text-compass-muted hover:text-compass-text hover:bg-white/5"
+                    )}
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{ws.name}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  setShowPicker(false);
+                  navigate("/workspace");
+                  useWorkspaceStore.getState().clearWorkspace();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-compass-muted hover:text-compass-text hover:bg-white/5 border-t border-compass-border transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                New Product
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Navigation */}

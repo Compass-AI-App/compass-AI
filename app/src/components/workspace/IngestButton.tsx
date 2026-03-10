@@ -6,33 +6,13 @@ export default function IngestButton() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const sources = useWorkspaceStore((s) => s.sources);
   const isIngesting = useWorkspaceStore((s) => s.isIngesting);
-  const setIngesting = useWorkspaceStore((s) => s.setIngesting);
-  const setIngestionResults = useWorkspaceStore((s) => s.setIngestionResults);
+  const triggerIngestion = useWorkspaceStore((s) => s.triggerIngestion);
   const evidenceCount = useWorkspaceStore((s) => s.evidenceCount);
   const ingestionResults = useWorkspaceStore((s) => s.ingestionResults);
 
-  async function handleIngest() {
+  function handleIngest() {
     if (!workspacePath || sources.length === 0) return;
-    setIngesting(true);
-
-    try {
-      const res = (await window.compass.engine.call("/ingest", {
-        workspace_path: workspacePath,
-      })) as {
-        status: string;
-        total: number;
-        sources: { name: string; type: string; items: number; error?: string }[];
-        summary: Record<string, number>;
-      };
-
-      if (res.status === "ok") {
-        setIngestionResults(res.sources, res.total, res.summary);
-      }
-    } catch (err) {
-      console.error("Ingest failed:", err);
-    } finally {
-      setIngesting(false);
-    }
+    triggerIngestion(workspacePath);
   }
 
   const hasResults = ingestionResults.length > 0;
@@ -58,7 +38,11 @@ export default function IngestButton() {
         ) : (
           <Play className="w-4 h-4" />
         )}
-        {isIngesting ? "Ingesting..." : hasResults ? "Re-ingest All Sources" : "Ingest All Sources"}
+        {isIngesting
+          ? `Ingesting ${sources.length} source${sources.length !== 1 ? "s" : ""}...`
+          : hasResults
+          ? "Re-ingest All Sources"
+          : "Ingest All Sources"}
       </button>
 
       {hasResults && (
