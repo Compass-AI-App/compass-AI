@@ -1,7 +1,8 @@
 import { useEffect } from "react";
-import { Settings, Key, Cpu, BarChart3 } from "lucide-react";
+import { Settings, Key, Cpu, BarChart3, RotateCcw } from "lucide-react";
 import { clsx } from "clsx";
 import { useSettingsStore, type LLMProvider } from "../stores/settings";
+import { resetOnboarding } from "./OnboardingPage";
 
 const MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
@@ -72,6 +73,19 @@ export default function SettingsPage() {
           </p>
         </Section>
       )}
+
+      {/* Reset onboarding */}
+      <Section icon={RotateCcw} title="Onboarding">
+        <button
+          onClick={() => {
+            resetOnboarding();
+            window.location.href = "/onboarding";
+          }}
+          className="px-4 py-2 rounded-lg border border-compass-border text-sm text-compass-muted hover:text-compass-text hover:border-compass-accent/20 transition-colors"
+        >
+          Reset Onboarding Wizard
+        </button>
+      </Section>
 
       {/* Model selector */}
       <Section icon={Cpu} title="Model">
