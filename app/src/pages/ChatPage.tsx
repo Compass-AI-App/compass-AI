@@ -3,7 +3,8 @@ import { MessageCircle, Send, Loader2, Trash2, Database } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
-import { useChatStore } from "../stores/chat";
+import { useChatStore, type AgentMode } from "../stores/chat";
+import { useStreamingChat } from "../hooks/useStreamingChat";
 
 const sourceColors: Record<string, string> = {
   code: "text-compass-code",
@@ -12,11 +13,26 @@ const sourceColors: Record<string, string> = {
   judgment: "text-compass-judgment",
 };
 
+const agentModes: { id: AgentMode; label: string }[] = [
+  { id: "default", label: "Default" },
+  { id: "thought-partner", label: "Thought Partner" },
+  { id: "technical-analyst", label: "Technical Analyst" },
+  { id: "devils-advocate", label: "Devil's Advocate" },
+];
+
 export default function ChatPage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
-  const { messages, loading, sendMessage, clearMessages } = useChatStore();
+  const { messages, loading, agentMode, clearMessages, setAgentMode, loadHistory } =
+    useChatStore();
+  const { sendStreaming } = useStreamingChat();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (workspacePath) {
+      loadHistory(workspacePath);
+    }
+  }, [workspacePath, loadHistory]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -24,7 +40,7 @@ export default function ChatPage() {
 
   function handleSend() {
     if (!input.trim() || !workspacePath || loading) return;
-    sendMessage(workspacePath, input.trim());
+    sendStreaming(workspacePath, input.trim());
     setInput("");
   }
 
@@ -44,6 +60,24 @@ export default function ChatPage() {
             <Trash2 className="w-4 h-4" />
           </button>
         )}
+      </div>
+
+      {/* Agent Mode Selector */}
+      <div className="flex gap-2 px-8 py-2 border-b border-compass-border shrink-0">
+        {agentModes.map((mode) => (
+          <button
+            key={mode.id}
+            onClick={() => setAgentMode(mode.id)}
+            className={clsx(
+              "px-3 py-1 rounded-full text-xs transition-colors",
+              agentMode === mode.id
+                ? "bg-compass-accent text-white"
+                : "bg-compass-card border border-compass-border text-compass-muted hover:text-compass-text"
+            )}
+          >
+            {mode.label}
+          </button>
+        ))}
       </div>
 
       {/* Messages */}

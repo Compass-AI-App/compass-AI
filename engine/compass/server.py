@@ -84,6 +84,7 @@ class ChatRequest(BaseModel):
     workspace_path: str
     message: str
     history: list[dict] = Field(default_factory=list)
+    agent_mode: str = "default"
 
 
 class SearchRequest(BaseModel):
@@ -412,6 +413,26 @@ Answer the user's question based ONLY on the evidence provided below.
 When citing evidence, use [source_type:title] format.
 If the evidence doesn't contain enough information, say so clearly."""
 
+AGENT_MODE_PROMPTS = {
+    "default": CHAT_SYSTEM,
+    "thought-partner": """You are Compass in Thought Partner mode. Help the PM think through
+product decisions by asking probing questions, exploring implications, and connecting dots
+across evidence. Don't just answer — help them think deeper. Use Socratic questioning.
+Ground everything in the evidence provided.""",
+    "technical-analyst": """You are Compass in Technical Analyst mode. Translate technical
+evidence into PM-friendly insights. When discussing code evidence, explain the business
+implications. Connect technical debt to user impact. Quantify where possible.
+Ground everything in the evidence provided.""",
+    "devils-advocate": """You are Compass in Devil's Advocate mode. Challenge the PM's
+assumptions constructively. Point out what the evidence DOESN'T support. Highlight risks,
+contradictions, and alternative interpretations. Be respectful but rigorous.
+Ground everything in the evidence provided.""",
+}
+
+
+def _get_chat_system(agent_mode: str) -> str:
+    return AGENT_MODE_PROMPTS.get(agent_mode, CHAT_SYSTEM)
+
 
 @app.post("/chat")
 def chat(req: ChatRequest):
@@ -446,7 +467,8 @@ USER QUESTION: {req.message}
 
 Provide a helpful, evidence-grounded answer. Cite specific evidence using [source_type:title] format."""
 
-    response = orch.ask(prompt, system=CHAT_SYSTEM)
+    system = _get_chat_system(req.agent_mode)
+    response = orch.ask(prompt, system=system)
 
     return {
         "status": "ok",
@@ -490,7 +512,8 @@ Provide a helpful, evidence-grounded answer. Cite specific evidence using [sourc
 
     def generate():
         yield _sse_event("citations", {"citations": citations})
-        for token in orch.ask_stream(prompt, system=CHAT_SYSTEM):
+        system = _get_chat_system(req.agent_mode)
+        for token in orch.ask_stream(prompt, system=system):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
