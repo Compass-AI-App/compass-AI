@@ -64,6 +64,7 @@ class Conflict(BaseModel):
     source_a_evidence: list[str] = Field(default_factory=list)  # evidence IDs
     source_b_evidence: list[str] = Field(default_factory=list)
     recommendation: str = ""
+    signal_strength: int = 1  # how many independent evidence items support this conflict
 
 
 class ConflictReport(BaseModel):

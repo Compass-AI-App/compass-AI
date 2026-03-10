@@ -180,6 +180,7 @@ def reconcile():
             f"[bold]{conflict.title}[/bold]\n\n"
             f"{conflict.description}\n\n"
             f"[dim]Type: {conflict.conflict_type.description}[/dim]\n"
+            f"[dim]Signal strength: {conflict.signal_strength} evidence items[/dim]\n"
             f"[dim]Recommendation: {conflict.recommendation}[/dim]",
             title=f"[{color}]{conflict.severity.value.upper()}[/{color}]",
             border_style=color,
