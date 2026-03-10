@@ -95,8 +95,8 @@ export default function Sidebar() {
 
   return (
     <aside className="flex flex-col w-[220px] h-full bg-compass-sidebar border-r border-compass-border select-none">
-      {/* Title bar drag region */}
-      <div className="h-12 flex items-center px-4 draggable shrink-0"
+      {/* Title bar drag region — pl-[78px] clears macOS traffic light buttons */}
+      <div className="h-12 flex items-center pl-[78px] pr-3 draggable shrink-0"
            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}>
         <div className="relative flex-1 min-w-0" ref={pickerRef}
              style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
