@@ -27,7 +27,7 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
   const navigate = useNavigate();
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
