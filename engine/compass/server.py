@@ -29,6 +29,7 @@ from compass.models.sources import Evidence, SourceType
 
 
 _kg: KnowledgeGraph | None = None
+_kg_workspace_path: str | None = None
 
 
 @asynccontextmanager
@@ -145,7 +146,7 @@ def connect_source(req: ConnectRequest):
 
 @app.post("/ingest")
 def ingest(req: WorkspaceRequest):
-    global _kg
+    global _kg, _kg_workspace_path
     base = Path(req.workspace_path)
     config = load_config(base)
 
@@ -154,6 +155,7 @@ def ingest(req: WorkspaceRequest):
 
     compass_dir = get_compass_dir(base)
     _kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+    _kg_workspace_path = req.workspace_path
     _kg.clear()
 
     results = []
@@ -525,14 +527,25 @@ def discover_stream(req: WorkspaceRequest):
 # ---------- Helpers ----------
 
 def _get_kg(workspace_path: str) -> KnowledgeGraph:
-    """Get the knowledge graph, loading from persistence (no re-ingestion)."""
-    global _kg
+    """Get the knowledge graph, loading from persistence (no re-ingestion).
+
+    If the workspace_path differs from the cached one, create a new KG
+    for the new workspace (workspace isolation).
+    """
+    global _kg, _kg_workspace_path
+
+    # If we have a cached KG for a different workspace, discard it
+    if _kg and _kg_workspace_path != workspace_path:
+        _kg = None
+        _kg_workspace_path = None
+
     if _kg and len(_kg) > 0:
         return _kg
 
     base = Path(workspace_path)
     compass_dir = get_compass_dir(base)
     _kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+    _kg_workspace_path = workspace_path
 
     if len(_kg) == 0:
         raise HTTPException(400, "No evidence ingested. Run ingest first.")
