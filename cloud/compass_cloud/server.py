@@ -10,12 +10,15 @@ from compass_cloud.models import (
     PLAN_LIMITS,
 )
 from compass_cloud import auth
+from compass_cloud.proxy import router as proxy_router
 
 app = FastAPI(
     title="Compass Cloud",
     version="0.1.0",
     description="Hosted Compass API with auth, LLM proxy, and billing.",
 )
+
+app.include_router(proxy_router)
 
 
 def _get_current_user(authorization: str = Header(...)):

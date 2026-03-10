@@ -137,10 +137,44 @@ class CompassCloudProvider(LLMProvider):
         model: str = "",
         max_tokens: int = 4096,
     ) -> tuple[str, int, int]:
-        raise NotImplementedError(
-            "Compass Cloud provider is not yet implemented. "
-            "Use COMPASS_LLM_PROVIDER=anthropic with your own API key."
+        import urllib.request
+        import urllib.error
+
+        if not self.auth_token:
+            raise ValueError(
+                "Compass Cloud auth token not set. "
+                "Run 'compass login' or set COMPASS_AUTH_TOKEN."
+            )
+
+        url = f"{self.cloud_url.rstrip('/')}/proxy/complete"
+        payload = json.dumps({
+            "prompt": prompt,
+            "system": system,
+            "model": model or "claude-sonnet-4-20250514",
+            "max_tokens": max_tokens,
+        }).encode()
+
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.auth_token}",
+            },
+            method="POST",
         )
+
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read().decode())
+                return (
+                    data["content"],
+                    data.get("input_tokens", 0),
+                    data.get("output_tokens", 0),
+                )
+        except urllib.error.HTTPError as e:
+            body = e.read().decode() if e.fp else ""
+            raise RuntimeError(f"Compass Cloud error ({e.code}): {body}") from e
 
 
 class Orchestrator:
