@@ -13,7 +13,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from compass.engine.history import get_history_summary, get_history
+from compass.engine.history import get_history_summary
 from compass.engine.knowledge_graph import KnowledgeGraph
 from compass.engine.llm import ask_json
 from compass.models.documents import (
@@ -158,7 +158,6 @@ class Writer:
         period = f"{start_date.strftime('%b %d')} - {end_date.strftime('%b %d, %Y')}"
 
         # Calculate evidence freshness
-        all_items = self.kg.store.items
         freshness_parts = []
         for source_type in SourceType:
             items = self.kg.store.by_source(source_type)
