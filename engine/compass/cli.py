@@ -1162,6 +1162,43 @@ def experiment(
             console.print(content)
 
 
+# --- analyze ---
+
+@app.command()
+def analyze(
+    question: str = typer.Argument(..., help="Product question to analyze"),
+    output: str = typer.Option("", "--output", "-o", help="Write analysis to file"),
+    format: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown or json"),
+):
+    """Analyze a product question using data evidence from the knowledge graph."""
+    config = load_config()
+    compass_dir = get_compass_dir()
+
+    from compass.engine.analyst import Analyst
+
+    kg = _load_knowledge_graph(compass_dir)
+    if not kg:
+        return
+
+    analyst = Analyst(kg, model=config.model)
+    result = analyst.analyze(question)
+
+    if format == "json":
+        content = json.dumps(result.model_dump(), indent=2)
+    else:
+        content = result.to_markdown()
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(content)
+        console.print(f"[green]Analysis written to {out_path}[/green]")
+    else:
+        if format == "markdown":
+            console.print(Markdown(content))
+        else:
+            console.print(content)
+
+
 # --- plan-week ---
 
 @app.command("plan-week")

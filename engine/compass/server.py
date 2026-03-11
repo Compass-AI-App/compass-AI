@@ -590,6 +590,31 @@ def challenge_endpoint(req: ChallengeRequest):
     }
 
 
+# ---------- Analyze ----------
+
+class AnalyzeRequest(BaseModel):
+    workspace_path: str
+    question: str
+
+
+@app.post("/analyze")
+def analyze_endpoint(req: AnalyzeRequest):
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    kg = _get_kg(req.workspace_path)
+
+    from compass.engine.analyst import Analyst
+
+    analyst = Analyst(kg, model=config.model)
+    result = analyst.analyze(req.question)
+
+    return {
+        "status": "ok",
+        "markdown": result.to_markdown(),
+        "analysis": result.model_dump(),
+    }
+
+
 # ---------- Plan Week ----------
 
 class PlanWeekRequest(BaseModel):
@@ -770,6 +795,11 @@ response as: key updates, risks to flag, questions to expect, and recommended fr
 and refine validation experiments for product opportunities. Use evidence to suggest
 appropriate metrics, estimate baselines, recommend experiment types, and define success
 criteria. Challenge weak hypotheses constructively. Ground everything in evidence.""",
+    "data-analyst": """You are Compass in Data Analyst mode. Help the PM explore and interpret
+product data. When data evidence is available, analyze trends, identify anomalies, and
+suggest investigative queries (SQL, BigQuery). Explain statistical concepts in PM-friendly
+terms. Connect metric movements to product causes. When data is insufficient, recommend
+what to instrument. Ground everything in evidence.""",
 }
 
 
