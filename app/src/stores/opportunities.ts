@@ -10,15 +10,19 @@ interface OpportunitiesState {
   specError: string | null;
   activeBrief: { title: string; markdown: string } | null;
   briefLoading: boolean;
+  activeChallenge: { title: string; markdown: string } | null;
+  challengeLoading: boolean;
 
   setOpportunities: (o: Opportunity[]) => void;
   setLoading: (v: boolean) => void;
   setActiveSpec: (s: { title: string; markdown: string; cursorMarkdown: string; claudeCodeMarkdown: string; spec: FeatureSpec } | null) => void;
   setSpecLoading: (v: boolean) => void;
   setActiveBrief: (b: { title: string; markdown: string } | null) => void;
+  setActiveChallenge: (c: { title: string; markdown: string } | null) => void;
   runDiscover: (workspacePath: string) => Promise<void>;
   generateSpec: (workspacePath: string, title: string) => Promise<void>;
   generateBrief: (workspacePath: string, title: string) => Promise<void>;
+  generateChallenge: (workspacePath: string, title: string) => Promise<void>;
 }
 
 export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
@@ -30,12 +34,15 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
   specError: null,
   activeBrief: null,
   briefLoading: false,
+  activeChallenge: null,
+  challengeLoading: false,
 
   setOpportunities: (opportunities) => set({ opportunities }),
   setLoading: (loading) => set({ loading }),
   setActiveSpec: (activeSpec) => set({ activeSpec }),
   setSpecLoading: (specLoading) => set({ specLoading }),
   setActiveBrief: (activeBrief) => set({ activeBrief }),
+  setActiveChallenge: (activeChallenge) => set({ activeChallenge }),
 
   runDiscover: async (workspacePath: string) => {
     set({ loading: true, error: null });
@@ -103,6 +110,24 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
       console.error("Brief generation failed:", err);
     } finally {
       set({ briefLoading: false });
+    }
+  },
+
+  generateChallenge: async (workspacePath: string, title: string) => {
+    set({ challengeLoading: true });
+    try {
+      const res = (await window.compass.engine.call("/challenge", {
+        workspace_path: workspacePath,
+        opportunity_title: title,
+      })) as { status: string; markdown: string };
+
+      if (res.status === "ok") {
+        set({ activeChallenge: { title, markdown: res.markdown } });
+      }
+    } catch (err) {
+      console.error("Challenge generation failed:", err);
+    } finally {
+      set({ challengeLoading: false });
     }
   },
 }));

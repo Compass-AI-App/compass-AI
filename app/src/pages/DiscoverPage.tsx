@@ -18,11 +18,15 @@ export default function DiscoverPage() {
     specError,
     activeBrief,
     briefLoading,
+    activeChallenge,
+    challengeLoading,
     runDiscover,
     generateSpec,
     generateBrief,
+    generateChallenge,
     setActiveSpec,
     setActiveBrief,
+    setActiveChallenge,
   } = useOpportunitiesStore();
 
   const [exporting, setExporting] = useState(false);
@@ -49,6 +53,10 @@ export default function DiscoverPage() {
 
   function handleGenerateBrief(title: string) {
     if (workspacePath) generateBrief(workspacePath, title);
+  }
+
+  function handleChallenge(title: string) {
+    if (workspacePath) generateChallenge(workspacePath, title);
   }
 
   async function handleWriteUpdate() {
@@ -193,8 +201,10 @@ export default function DiscoverPage() {
               opportunity={opp}
               onGenerateSpec={handleGenerateSpec}
               onGenerateBrief={handleGenerateBrief}
+              onChallenge={handleChallenge}
               specLoading={specLoading}
               briefLoading={briefLoading}
+              challengeLoading={challengeLoading}
             />
           ))}
         </div>
@@ -277,6 +287,15 @@ export default function DiscoverPage() {
           title={activeUpdate.title}
           markdown={activeUpdate.markdown}
           onClose={() => setActiveUpdate(null)}
+        />
+      )}
+
+      {/* Challenge slide-over */}
+      {activeChallenge && (
+        <DocumentView
+          title={`Challenge: ${activeChallenge.title}`}
+          markdown={activeChallenge.markdown}
+          onClose={() => setActiveChallenge(null)}
         />
       )}
     </div>

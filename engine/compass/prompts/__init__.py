@@ -11,6 +11,7 @@ from compass.prompts.discover_v1 import SYSTEM as DISCOVER_V1_SYSTEM, PROMPT as 
 from compass.prompts.specify_v1 import SYSTEM as SPECIFY_V1_SYSTEM, PROMPT as SPECIFY_V1_PROMPT
 from compass.prompts.write_brief_v1 import SYSTEM as WRITE_BRIEF_V1_SYSTEM, PROMPT as WRITE_BRIEF_V1_PROMPT
 from compass.prompts.write_update_v1 import SYSTEM as WRITE_UPDATE_V1_SYSTEM, PROMPT as WRITE_UPDATE_V1_PROMPT
+from compass.prompts.challenge_v1 import SYSTEM as CHALLENGE_V1_SYSTEM, PROMPT as CHALLENGE_V1_PROMPT
 
 # Default prompt version
 DEFAULT_VERSION = "v1"
@@ -31,6 +32,9 @@ REGISTRY: dict[str, dict[str, dict[str, str]]] = {
     },
     "write_update": {
         "v1": {"system": WRITE_UPDATE_V1_SYSTEM, "prompt": WRITE_UPDATE_V1_PROMPT},
+    },
+    "challenge": {
+        "v1": {"system": CHALLENGE_V1_SYSTEM, "prompt": CHALLENGE_V1_PROMPT},
     },
 }
 

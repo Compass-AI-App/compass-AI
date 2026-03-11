@@ -541,6 +541,55 @@ def write_update_endpoint(req: WriteUpdateRequest):
     }
 
 
+# ---------- Challenge ----------
+
+class ChallengeRequest(BaseModel):
+    workspace_path: str
+    opportunity_title: str
+    description: str = ""
+    evidence_summary: str = ""
+
+
+@app.post("/challenge")
+def challenge_endpoint(req: ChallengeRequest):
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    kg = _get_kg(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    from compass.engine.challenger import Challenger
+
+    # Try to fill in from cached opportunities
+    description = req.description
+    evidence_summary = req.evidence_summary
+    if not description:
+        cache_path = compass_dir / "opportunities_cache.json"
+        if cache_path.exists():
+            try:
+                cache = json.loads(cache_path.read_text())
+                for opp_data in cache:
+                    if req.opportunity_title.lower() in opp_data.get("title", "").lower():
+                        description = opp_data.get("description", "")
+                        evidence_summary = opp_data.get("evidence_summary", "")
+                        break
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    challenger = Challenger(kg, model=config.model)
+    result = challenger.challenge(
+        req.opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+        compass_dir=compass_dir,
+    )
+
+    return {
+        "status": "ok",
+        "markdown": result.to_markdown(),
+        "challenge": result.model_dump(),
+    }
+
+
 # ---------- Specify ----------
 
 @app.post("/specify")
