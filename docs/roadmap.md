@@ -1280,11 +1280,11 @@ M0-M8 (Build) → M9-M11 (Depth) → M12-M16 (Full PM Toolkit)
 | Make It Real | M9 (5 tasks) | E2E reliability | ✅ Complete |
 | First Users | M10 (4 tasks) | Real-world distribution | ✅ Complete |
 | Prove Value | M11 (5 tasks) | Insight quality | ✅ Complete |
-| **Writing** | **M12 (4 tasks)** | **Evidence-grounded writing** | 🔄 Current |
-| **Challenge** | **M13 (4 tasks)** | **Deep devil's advocate** | Planned |
-| **Experiments** | **M14 (4 tasks)** | **Experiment design** | Planned |
-| **Planning** | **M15 (4 tasks)** | **Weekly planning & chat** | Planned |
-| **Analysis** | **M16 (3 tasks)** | **Data analysis** | Planned |
+| Writing | M12 (4 tasks) | Evidence-grounded writing | ✅ Complete |
+| Challenge | M13 (4 tasks) | Deep devil's advocate | ✅ Complete |
+| Experiments | M14 (4 tasks) | Experiment design | ✅ Complete |
+| Planning | M15 (4 tasks) | Weekly planning & chat | ✅ Complete |
+| Analysis | M16 (3 tasks) | Data analysis | ✅ Complete |
 
 ### Total: 80 tasks across 17 milestones
 
