@@ -729,17 +729,35 @@ def doctor(
             console.print(msg)
             checks_failed += 1
 
-    console.print("\n[bold]Compass Doctor[/bold]\n")
+    from compass import __version__
+
+    console.print(f"\n[bold]Compass Doctor[/bold]  [dim]v{__version__}[/dim]\n")
 
     # 1. Python version
     py_version = sys.version_info
     _check(
         f"Python {py_version.major}.{py_version.minor}.{py_version.micro}",
         py_version >= (3, 11),
-        "Compass requires Python 3.11+",
+        "Compass requires Python 3.11+. Install from python.org",
     )
 
-    # 2. Workspace exists
+    # 2. Core dependencies
+    missing_deps = []
+    for dep_name in ["chromadb", "anthropic", "fastapi", "mcp", "typer", "rich"]:
+        try:
+            __import__(dep_name)
+        except ImportError:
+            missing_deps.append(dep_name)
+    _check(
+        f"Core dependencies installed ({6 - len(missing_deps)}/6)",
+        len(missing_deps) == 0,
+        f"Missing: {', '.join(missing_deps)}. Run: pip install compass-ai" if missing_deps else "",
+    )
+
+    # 3. Compass version
+    _check(f"Compass version: {__version__}", True)
+
+    # 4. Workspace exists
     compass_dir = Path.cwd() / ".compass"
     workspace_exists = compass_dir.exists()
     if not workspace_exists and fix:
@@ -749,41 +767,87 @@ def doctor(
         console.print("    [dim](created .compass/ directory)[/dim]")
     _check("Workspace found (.compass/)", workspace_exists, "Run: compass init \"My Product\"")
 
-    # 3. Config file
+    # 5. Config file
     config_file = compass_dir / "compass.yaml"
     _check("Config file exists", config_file.exists(), "Run: compass init \"My Product\"")
 
-    # 4. Sources connected
+    # 6. Sources connected
     sources_connected = False
     source_count = 0
+    source_types = set()
     if config_file.exists():
         try:
             config = load_config()
             source_count = len(config.sources)
             sources_connected = source_count > 0
+            source_types = {s.type for s in config.sources}
         except Exception:
             pass
+    type_str = f" ({', '.join(sorted(source_types))})" if source_types else ""
     _check(
-        f"Sources connected ({source_count})",
+        f"Sources connected ({source_count}{type_str})",
         sources_connected,
         "Run: compass connect <type> --path <path>",
     )
 
-    # 5. Evidence ingested
+    # 7. Evidence ingested
     evidence_file = compass_dir / "knowledge" / "evidence_store.json"
     evidence_ingested = evidence_file.exists()
-    _check("Evidence ingested", evidence_ingested, "Run: compass ingest")
+    evidence_count = 0
+    if evidence_ingested:
+        try:
+            import json
+            data = json.loads(evidence_file.read_text())
+            evidence_count = len(data) if isinstance(data, list) else 0
+        except Exception:
+            pass
+    _check(
+        f"Evidence ingested ({evidence_count} items)",
+        evidence_ingested,
+        "Run: compass ingest",
+    )
 
-    # 6. API key
+    # 8. API key
     import os
-    api_key_set = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    api_key_set = bool(
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("TASKFORCE_API_KEY")
+    )
+    if not api_key_set:
+        # Check .env file
+        env_file = Path.cwd() / "engine" / ".env"
+        if not env_file.exists():
+            env_file = Path.cwd() / ".env"
+        if env_file.exists():
+            try:
+                env_content = env_file.read_text()
+                if "API_KEY" in env_content:
+                    api_key_set = True
+            except Exception:
+                pass
     _check(
         "API key configured",
         api_key_set,
-        "Set ANTHROPIC_API_KEY environment variable",
+        "Set ANTHROPIC_API_KEY env var or add to .env file",
     )
 
-    # 7. Engine reachable
+    # 9. Workspace state
+    output_dir = compass_dir / "output"
+    has_conflicts = (output_dir / "conflict-report.md").exists() if output_dir.exists() else False
+    has_opportunities = (compass_dir / "opportunities_cache.json").exists()
+    state_parts = []
+    if has_conflicts:
+        state_parts.append("conflicts")
+    if has_opportunities:
+        state_parts.append("opportunities")
+    state_str = ", ".join(state_parts) if state_parts else "none"
+    _check(
+        f"Discovery artifacts ({state_str})",
+        has_conflicts or has_opportunities,
+        "Run: compass reconcile && compass discover",
+    )
+
+    # 10. Engine reachable
     engine_ok = False
     try:
         import urllib.request
@@ -795,7 +859,7 @@ def doctor(
     _check(
         "Engine server reachable",
         engine_ok,
-        "Run: compass server (or start the Compass app)",
+        "Run: compass server (or start the Compass app) — optional for CLI usage",
     )
 
     # Summary
