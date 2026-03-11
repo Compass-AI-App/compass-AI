@@ -1,0 +1,55 @@
+"""Versioned prompt registry for Compass engine components.
+
+Each prompt version is a dict with system and user prompt templates.
+The registry maps version names to prompt dicts for each engine component.
+"""
+
+from __future__ import annotations
+
+from compass.prompts.reconcile_v1 import SYSTEM as RECONCILE_V1_SYSTEM, PROMPT as RECONCILE_V1_PROMPT
+from compass.prompts.discover_v1 import SYSTEM as DISCOVER_V1_SYSTEM, PROMPT as DISCOVER_V1_PROMPT
+from compass.prompts.specify_v1 import SYSTEM as SPECIFY_V1_SYSTEM, PROMPT as SPECIFY_V1_PROMPT
+
+# Default prompt version
+DEFAULT_VERSION = "v1"
+
+# Registry: component → version → {system, prompt}
+REGISTRY: dict[str, dict[str, dict[str, str]]] = {
+    "reconcile": {
+        "v1": {"system": RECONCILE_V1_SYSTEM, "prompt": RECONCILE_V1_PROMPT},
+    },
+    "discover": {
+        "v1": {"system": DISCOVER_V1_SYSTEM, "prompt": DISCOVER_V1_PROMPT},
+    },
+    "specify": {
+        "v1": {"system": SPECIFY_V1_SYSTEM, "prompt": SPECIFY_V1_PROMPT},
+    },
+}
+
+
+def get_prompts(component: str, version: str = DEFAULT_VERSION) -> dict[str, str]:
+    """Get system and prompt templates for a component at a given version.
+
+    Args:
+        component: "reconcile", "discover", or "specify"
+        version: prompt version (e.g., "v1")
+
+    Returns:
+        Dict with "system" and "prompt" keys.
+
+    Raises:
+        KeyError: If component or version not found.
+    """
+    if component not in REGISTRY:
+        raise KeyError(f"Unknown component '{component}'. Available: {list(REGISTRY.keys())}")
+    versions = REGISTRY[component]
+    if version not in versions:
+        raise KeyError(f"Unknown version '{version}' for {component}. Available: {list(versions.keys())}")
+    return versions[version]
+
+
+def list_versions(component: str) -> list[str]:
+    """List available prompt versions for a component."""
+    if component not in REGISTRY:
+        return []
+    return list(REGISTRY[component].keys())
