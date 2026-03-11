@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Database, FileCode2, FileText, Loader2, ShieldAlert, ThumbsUp, Star, ThumbsDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Database, FileCode2, FileText, FlaskConical, Loader2, ShieldAlert, ThumbsUp, Star, ThumbsDown } from "lucide-react";
 import { clsx } from "clsx";
 import type { Opportunity, Confidence } from "../../types/engine";
 import { useWorkspaceStore } from "../../stores/workspace";
@@ -16,14 +16,16 @@ interface Props {
   onGenerateSpec: (title: string) => void;
   onGenerateBrief: (title: string) => void;
   onChallenge: (title: string) => void;
+  onDesignExperiment: (title: string) => void;
   specLoading: boolean;
   briefLoading: boolean;
   challengeLoading: boolean;
+  experimentLoading: boolean;
 }
 
 type Rating = "known" | "surprise" | "wrong" | null;
 
-export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerateBrief, onChallenge, specLoading, briefLoading, challengeLoading }: Props) {
+export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerateBrief, onChallenge, onDesignExperiment, specLoading, briefLoading, challengeLoading, experimentLoading }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [rating, setRating] = useState<Rating>(null);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -152,6 +154,21 @@ export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerat
                   <ShieldAlert className="w-4 h-4" />
                 )}
                 Challenge
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDesignExperiment(opportunity.title);
+                }}
+                disabled={experimentLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-purple-500/30 text-purple-400/70 hover:text-purple-400 hover:border-purple-500/50 text-sm font-medium transition-colors"
+              >
+                {experimentLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FlaskConical className="w-4 h-4" />
+                )}
+                Experiment
               </button>
             </div>
             <div className="flex items-center gap-1">

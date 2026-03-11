@@ -590,6 +590,55 @@ def challenge_endpoint(req: ChallengeRequest):
     }
 
 
+# ---------- Experiment ----------
+
+class ExperimentRequest(BaseModel):
+    workspace_path: str
+    opportunity_title: str
+    description: str = ""
+    evidence_summary: str = ""
+
+
+@app.post("/experiment")
+def experiment_endpoint(req: ExperimentRequest):
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    kg = _get_kg(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    from compass.engine.experimenter import Experimenter
+
+    # Try to fill in from cached opportunities
+    description = req.description
+    evidence_summary = req.evidence_summary
+    if not description:
+        cache_path = compass_dir / "opportunities_cache.json"
+        if cache_path.exists():
+            try:
+                cache = json.loads(cache_path.read_text())
+                for opp_data in cache:
+                    if req.opportunity_title.lower() in opp_data.get("title", "").lower():
+                        description = opp_data.get("description", "")
+                        evidence_summary = opp_data.get("evidence_summary", "")
+                        break
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    experimenter = Experimenter(kg, model=config.model)
+    result = experimenter.design_experiment(
+        req.opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+        compass_dir=compass_dir,
+    )
+
+    return {
+        "status": "ok",
+        "markdown": result.to_markdown(),
+        "experiment": result.model_dump(),
+    }
+
+
 # ---------- Specify ----------
 
 @app.post("/specify")
