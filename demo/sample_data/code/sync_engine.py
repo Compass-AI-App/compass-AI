@@ -19,8 +19,10 @@ POLL_INTERVAL_SECONDS = 5
 # TODO: Implement proper exponential backoff instead of reducing retries.
 MAX_RETRIES = 1
 
-# Connection pool size hasn't been increased since launch
-# despite 4x growth in active connections.
+# Connection pool size hasn't been increased since launch (March 2025)
+# despite 4x growth in active connections (10k → 41k).
+# At peak load, all 50 threads are blocked by synchronous poll operations.
+# Last performance review: "pool exhaustion causing 14s+ P95 latency" (Jan 2026).
 CONNECTION_POOL_SIZE = 50
 
 

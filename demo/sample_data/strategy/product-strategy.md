@@ -9,7 +9,7 @@ SyncFlow is the fastest way for teams to keep their work in sync across tools. O
 ### P0: Real-time Sync (Our Moat)
 Our core differentiator and the reason customers choose us over Zapier. All integrations sync within 5 seconds — guaranteed. This is what makes SyncFlow special: instant, reliable, real-time sync. We've invested 18 months of engineering into our sync engine and it's the most technically advanced sync system in the market. No competitor comes close.
 
-**Q1 focus:** Maintain sync reliability as we scale. The sync engine is solid — now we need to optimize for the long tail of edge cases. Target: 99.9% sync success rate.
+**Q1 focus:** Maintain sync reliability as we scale. The sync engine is solid and battle-tested — we've had no major architectural issues. Now we need to optimize for the long tail of edge cases. Target: 99.9% sync success rate. Current reliability is strong; this is about going from good to great.
 
 ### P1: Enterprise Security
 SOC2 compliance, SSO, and audit logging. Required for landing enterprise deals over $50k ARR. Target: complete by end of Q1. This unlocks our biggest expansion opportunity.
@@ -36,4 +36,4 @@ Open up our sync engine as an API for programmatic access. Early signals from 3 
 - **Merge.dev:** API-first but no user-facing product. We win on UX.
 - **Workato:** Enterprise-focused, 10x our price. We win on value.
 
-Our moat is real-time sync. As long as we maintain sub-5-second sync times, we're differentiated.
+Our moat is real-time sync. As long as we maintain sub-5-second sync times, we're differentiated. We are confident in our sync reliability — it's our strongest technical asset and the foundation everything else is built on.
