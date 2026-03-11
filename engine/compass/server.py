@@ -465,6 +465,82 @@ def generate_report_endpoint(req: ReportRequest):
     return {"status": "ok", "format": req.format, "content": content}
 
 
+# ---------- Write ----------
+
+class WriteBriefRequest(BaseModel):
+    workspace_path: str
+    opportunity_title: str
+    description: str = ""
+    evidence_summary: str = ""
+
+
+class WriteUpdateRequest(BaseModel):
+    workspace_path: str
+    days: int = 7
+
+
+@app.post("/write/brief")
+def write_brief_endpoint(req: WriteBriefRequest):
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    kg = _get_kg(req.workspace_path)
+
+    from compass.engine.writer import Writer
+
+    # Try to fill in description/evidence from cached opportunities
+    description = req.description
+    evidence_summary = req.evidence_summary
+    if not description:
+        compass_dir = get_compass_dir(base)
+        cache_path = compass_dir / "opportunities_cache.json"
+        if cache_path.exists():
+            try:
+                cache = json.loads(cache_path.read_text())
+                for opp_data in cache:
+                    if req.opportunity_title.lower() in opp_data.get("title", "").lower():
+                        description = opp_data.get("description", "")
+                        evidence_summary = opp_data.get("evidence_summary", "")
+                        break
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    writer = Writer(kg, model=config.model)
+    brief = writer.write_brief(
+        req.opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+    )
+
+    return {
+        "status": "ok",
+        "markdown": brief.to_markdown(),
+        "brief": brief.model_dump(),
+    }
+
+
+@app.post("/write/update")
+def write_update_endpoint(req: WriteUpdateRequest):
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    kg = _get_kg(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    from compass.engine.writer import Writer
+
+    writer = Writer(kg, model=config.model)
+    update = writer.write_update(
+        compass_dir=compass_dir,
+        product_name=config.name,
+        days=req.days,
+    )
+
+    return {
+        "status": "ok",
+        "markdown": update.to_markdown(),
+        "update": update.model_dump(),
+    }
+
+
 # ---------- Specify ----------
 
 @app.post("/specify")
