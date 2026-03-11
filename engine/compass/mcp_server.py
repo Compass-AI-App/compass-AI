@@ -23,16 +23,27 @@ mcp = FastMCP(
 
 
 def _get_workspace() -> Path:
-    """Resolve the workspace path from env or cwd."""
+    """Resolve the workspace path from env or cwd.
+
+    Priority: COMPASS_WORKSPACE env var → walk up from cwd looking for .compass/.
+    Raises FileNotFoundError if no workspace found.
+    """
     ws = os.environ.get("COMPASS_WORKSPACE", "")
     if ws:
-        return Path(ws)
+        ws_path = Path(ws)
+        if (ws_path / ".compass").is_dir():
+            return ws_path
+        # COMPASS_WORKSPACE set but not initialized — still use it (init will create .compass/)
+        return ws_path
     # Walk up from cwd looking for .compass/
     cwd = Path.cwd()
     for p in [cwd, *cwd.parents]:
         if (p / ".compass").is_dir():
             return p
-    return cwd
+    raise FileNotFoundError(
+        f"No Compass workspace found (checked {cwd} and parents). "
+        "Set COMPASS_WORKSPACE env var or run `compass init` in your project directory."
+    )
 
 
 def _get_kg(workspace: Path):
@@ -53,11 +64,11 @@ def _get_config(workspace: Path):
 @mcp.tool()
 def compass_status() -> str:
     """Show workspace health: connected sources, evidence counts, freshness."""
-    workspace = _get_workspace()
     try:
+        workspace = _get_workspace()
         config = _get_config(workspace)
     except FileNotFoundError:
-        return "No Compass workspace found. Run `compass init` first."
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
 
     kg = _get_kg(workspace)
     lines = [
@@ -107,11 +118,11 @@ def compass_status() -> str:
 @mcp.tool()
 def compass_ingest() -> str:
     """Ingest evidence from all connected sources into the knowledge graph."""
-    workspace = _get_workspace()
     try:
+        workspace = _get_workspace()
         config = _get_config(workspace)
     except FileNotFoundError:
-        return "No Compass workspace found. Run `compass init` first."
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
 
     if not config.sources:
         return "No sources connected. Run `compass connect` first."
@@ -147,7 +158,10 @@ def compass_ingest() -> str:
 @mcp.tool()
 def compass_reconcile() -> str:
     """Find conflicts between sources of truth (Code vs Docs vs Data vs Judgment)."""
-    workspace = _get_workspace()
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
     kg = _get_kg(workspace)
     if len(kg) == 0:
         return "No evidence ingested. Run `compass ingest` first."
@@ -207,7 +221,10 @@ def compass_reconcile() -> str:
 @mcp.tool()
 def compass_discover() -> str:
     """Synthesize evidence into ranked product opportunities. Answers: 'What should we build next?'"""
-    workspace = _get_workspace()
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
     kg = _get_kg(workspace)
     if len(kg) == 0:
         return "No evidence ingested. Run `compass ingest` first."
@@ -265,7 +282,10 @@ def compass_specify(opportunity_title: str) -> str:
     Args:
         opportunity_title: Title of the opportunity to specify (from compass_discover output)
     """
-    workspace = _get_workspace()
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
     kg = _get_kg(workspace)
     if len(kg) == 0:
         return "No evidence ingested. Run `compass ingest` first."
@@ -312,7 +332,10 @@ def compass_ask(question: str) -> str:
     Args:
         question: Your question about the product (e.g., "What frustrates users the most?")
     """
-    workspace = _get_workspace()
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
     kg = _get_kg(workspace)
     if len(kg) == 0:
         return "No evidence ingested. Run `compass ingest` first."
@@ -348,7 +371,10 @@ def compass_search(query: str, source_type: str = "") -> str:
         query: Search query (e.g., "sync failures", "user onboarding")
         source_type: Optional filter: "code", "docs", "data", or "judgment"
     """
-    workspace = _get_workspace()
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
     kg = _get_kg(workspace)
     if len(kg) == 0:
         return "No evidence ingested. Run `compass ingest` first."
@@ -386,11 +412,11 @@ def compass_refresh(source_name: str = "") -> str:
     Args:
         source_name: Source to refresh (e.g., "analytics:metrics"). Empty = refresh all.
     """
-    workspace = _get_workspace()
     try:
+        workspace = _get_workspace()
         config = _get_config(workspace)
     except FileNotFoundError:
-        return "No Compass workspace found. Run `compass init` first."
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
 
     if not config.sources:
         return "No sources connected."
@@ -440,11 +466,11 @@ def compass_connect(source_type: str, path: str, name: str = "") -> str:
         path: Local file or directory path
         name: Optional custom name for this source
     """
-    workspace = _get_workspace()
     try:
+        workspace = _get_workspace()
         config = _get_config(workspace)
     except FileNotFoundError:
-        return "No Compass workspace found. Run `compass init` first."
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
 
     from compass.config import SourceConfig, save_config
     from compass.connectors import get_connector
