@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Download, Lightbulb, Loader2, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, Clock, Download, Lightbulb, Loader2, Sparkles } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useOpportunitiesStore } from "../stores/opportunities";
@@ -21,6 +21,19 @@ export default function DiscoverPage() {
   } = useOpportunitiesStore();
 
   const [exporting, setExporting] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [history, setHistory] = useState<{ summary: Record<string, unknown>; runs: Record<string, unknown>[] } | null>(null);
+
+  useEffect(() => {
+    if (workspacePath && opportunities.length > 0) {
+      window.compass?.engine.call("/history", { workspace_path: workspacePath })
+        .then((res) => {
+          const data = res as { status: string; summary: Record<string, unknown>; runs: Record<string, unknown>[] };
+          if (data?.status === "ok") setHistory(data);
+        })
+        .catch(() => {});
+    }
+  }, [workspacePath, opportunities]);
 
   function handleGenerateSpec(title: string) {
     if (workspacePath) generateSpec(workspacePath, title);
@@ -138,6 +151,57 @@ export default function DiscoverPage() {
               specLoading={specLoading}
             />
           ))}
+        </div>
+      )}
+
+      {/* History timeline */}
+      {history && (history.summary as { total_runs?: number })?.total_runs !== undefined &&
+        ((history.summary as { total_runs: number }).total_runs > 0) && (
+        <div className="mt-6">
+          <button
+            onClick={() => setHistoryExpanded(!historyExpanded)}
+            className="flex items-center gap-2 text-sm text-compass-muted hover:text-compass-text transition-colors mb-3"
+          >
+            {historyExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <Clock className="w-4 h-4" />
+            Discovery History ({(history.summary as { total_runs: number }).total_runs} runs)
+          </button>
+          {historyExpanded && (
+            <div className="space-y-2 pl-6 border-l-2 border-compass-border">
+              {history.runs.slice().reverse().slice(0, 10).map((run, i) => (
+                <div key={i} className="rounded-lg bg-compass-card border border-compass-border p-3">
+                  <div className="flex items-center gap-2 text-xs text-compass-muted mb-1.5">
+                    <span>{new Date(run.timestamp as string).toLocaleDateString()}</span>
+                    <span>·</span>
+                    <span>{(run as { opportunity_count?: number }).opportunity_count ?? 0} opportunities</span>
+                    <span>·</span>
+                    <span>{(run as { conflict_count?: number }).conflict_count ?? 0} conflicts</span>
+                    {(run as { prompt_version?: string }).prompt_version && (
+                      <>
+                        <span>·</span>
+                        <span className="font-mono">{(run as { prompt_version?: string }).prompt_version}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {((run as { opportunities?: { title: string; confidence: string }[] }).opportunities ?? []).map((opp, j) => (
+                      <span
+                        key={j}
+                        className={clsx(
+                          "text-xs px-2 py-0.5 rounded-full",
+                          opp.confidence === "high" ? "bg-green-500/15 text-green-400" :
+                          opp.confidence === "medium" ? "bg-yellow-500/15 text-yellow-400" :
+                          "bg-neutral-500/15 text-neutral-400"
+                        )}
+                      >
+                        {opp.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
