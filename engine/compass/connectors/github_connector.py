@@ -6,10 +6,13 @@ Answers: "What CAN the product do?"
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from compass.connectors.base import Connector
 from compass.models.sources import Evidence, SourceType
+
+logger = logging.getLogger(__name__)
 
 RELEVANT_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java",
@@ -82,7 +85,8 @@ class GitHubConnector(Connector):
                         "extension": fpath.suffix,
                     },
                 ))
-            except Exception:
+            except Exception as e:
+                logger.warning("Skipping %s: %s", fpath, e)
                 continue
 
         git_log = self._get_git_log(repo_path)
@@ -108,6 +112,8 @@ class GitHubConnector(Connector):
         files: list[Path] = []
         for fpath in repo_path.rglob("*"):
             if any(skip in fpath.parts for skip in SKIP_DIRS):
+                continue
+            if fpath.is_symlink():
                 continue
             if fpath.is_file() and fpath.suffix in RELEVANT_EXTENSIONS:
                 files.append(fpath)
