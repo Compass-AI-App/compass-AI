@@ -1037,6 +1037,112 @@ def report(
             console.print(content)
 
 
+# --- write-brief ---
+
+@app.command("write-brief")
+def write_brief(
+    opportunity_title: str = typer.Argument(..., help="Title of the opportunity to write a brief for"),
+    output: str = typer.Option("", "--output", "-o", help="Write brief to file instead of stdout"),
+    format: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown or json"),
+):
+    """Generate an evidence-grounded product brief for an opportunity."""
+    config = load_config()
+    compass_dir = get_compass_dir()
+
+    from compass.engine.writer import Writer
+
+    kg = _load_knowledge_graph(compass_dir)
+    if not kg:
+        return
+
+    # Try to find cached opportunity for description/evidence
+    cache_path = compass_dir / "opportunities_cache.json"
+    description = ""
+    evidence_summary = ""
+
+    if cache_path.exists():
+        try:
+            cache = json.loads(cache_path.read_text())
+            for opp_data in cache:
+                if opportunity_title.lower() in opp_data.get("title", "").lower():
+                    description = opp_data.get("description", "")
+                    evidence_summary = opp_data.get("evidence_summary", "")
+                    break
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    writer = Writer(kg, model=config.model)
+    brief = writer.write_brief(
+        opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+    )
+
+    if format == "json":
+        content = json.dumps(brief.model_dump(), indent=2)
+    else:
+        content = brief.to_markdown()
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(content)
+        console.print(f"[green]Brief written to {out_path}[/green]")
+    else:
+        if format == "markdown":
+            console.print(Markdown(content))
+        else:
+            console.print(content)
+
+    # Save to output dir
+    if not output:
+        output_dir = get_output_dir()
+        safe_name = opportunity_title.lower().replace(" ", "-")[:50]
+        brief_path = output_dir / f"brief-{safe_name}.md"
+        brief_path.write_text(brief.to_markdown())
+        console.print(f"\n[dim]Brief saved to {brief_path}[/dim]")
+
+
+# --- write-update ---
+
+@app.command("write-update")
+def write_update(
+    since: int = typer.Option(7, "--since", "-s", help="Number of days to cover in the update"),
+    output: str = typer.Option("", "--output", "-o", help="Write update to file instead of stdout"),
+    format: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown or json"),
+):
+    """Generate an evidence-grounded stakeholder update."""
+    config = load_config()
+    compass_dir = get_compass_dir()
+
+    from compass.engine.writer import Writer
+
+    kg = _load_knowledge_graph(compass_dir)
+    if not kg:
+        return
+
+    writer = Writer(kg, model=config.model)
+    update = writer.write_update(
+        compass_dir=compass_dir,
+        product_name=config.name,
+        days=since,
+    )
+
+    if format == "json":
+        content = json.dumps(update.model_dump(), indent=2)
+    else:
+        content = update.to_markdown()
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(content)
+        console.print(f"[green]Update written to {out_path}[/green]")
+    else:
+        if format == "markdown":
+            console.print(Markdown(content))
+        else:
+            console.print(content)
+
+
 # --- quickstart ---
 
 @app.command()

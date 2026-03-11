@@ -490,6 +490,87 @@ def compass_connect(source_type: str, path: str, name: str = "") -> str:
     return f"Connected **{source_name}** ({source_type}) — accessible ✓\n\nRun `compass_ingest` to ingest evidence."
 
 
+@mcp.tool()
+def compass_write_brief(opportunity_title: str) -> str:
+    """Generate an evidence-grounded product brief for an opportunity.
+
+    Creates a structured brief with problem statement, requirements (P0/P1/P2),
+    success metrics, and risks — all grounded in evidence from your knowledge graph.
+
+    Args:
+        opportunity_title: Title of the opportunity (from compass_discover output)
+    """
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
+    kg = _get_kg(workspace)
+    if len(kg) == 0:
+        return "No evidence ingested. Run `compass ingest` first."
+
+    config = _get_config(workspace)
+    from compass.engine.writer import Writer
+    import json
+
+    # Try to find cached opportunity for richer context
+    from compass.config import get_compass_dir
+    compass_dir = get_compass_dir(workspace)
+    cache_path = compass_dir / "opportunities_cache.json"
+    description = ""
+    evidence_summary = ""
+
+    if cache_path.exists():
+        try:
+            cache = json.loads(cache_path.read_text())
+            for opp_data in cache:
+                if opportunity_title.lower() in opp_data.get("title", "").lower():
+                    description = opp_data.get("description", "")
+                    evidence_summary = opp_data.get("evidence_summary", "")
+                    break
+        except Exception:
+            pass
+
+    writer = Writer(kg, model=config.model)
+    brief = writer.write_brief(
+        opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+    )
+    return brief.to_markdown()
+
+
+@mcp.tool()
+def compass_write_update(days: int = 7) -> str:
+    """Generate an evidence-grounded stakeholder update.
+
+    Summarizes what changed across your sources of truth (Code, Docs, Data, Judgment),
+    highlights new signals and risks, and recommends next steps.
+
+    Args:
+        days: Number of days to cover in the update (default: 7)
+    """
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
+    kg = _get_kg(workspace)
+    if len(kg) == 0:
+        return "No evidence ingested. Run `compass ingest` first."
+
+    config = _get_config(workspace)
+    from compass.engine.writer import Writer
+    from compass.config import get_compass_dir
+
+    compass_dir = get_compass_dir(workspace)
+    writer = Writer(kg, model=config.model)
+    update = writer.write_update(
+        compass_dir=compass_dir,
+        product_name=config.name,
+        days=days,
+    )
+    return update.to_markdown()
+
+
 def main():
     """Run the MCP server (stdio transport)."""
     mcp.run(transport="stdio")
