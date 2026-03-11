@@ -774,35 +774,265 @@ Reserve capacity for issues surfaced in M5 beta. Not pre-planned — allocated t
 
 ---
 
+## M9: Make It Real
+
+**Post-M8 — Depth Phase**
+
+**Goal:** The full pipeline works reliably — CLI, app, and MCP. Demo is bulletproof. Zero broken flows. Everything that claims to work actually works when tested end-to-end.
+
+**Why now:** M0-M8 built feature breadth. But the codebase has never been tested by a real user. Onboarding has confirmed bugs, the packaged .dmg won't work on a clean Mac, and MCP has never been tested in a real Claude Code session. This milestone closes the gap between "code exists" and "it works."
+
+### Tasks
+
+#### M9-T1: Fix Onboarding Connect Flow
+
+Confirmed bugs: `handleConnectSource` sends wrong request shape to `/connect`, source_type mapping is wrong, sources are connected before `/init`, "Compass-provided" AI implies a bundled key that doesn't exist.
+
+**Scope:**
+1. Fix `handleConnectSource` to send correct `ConnectRequest` shape (`name`, `path` top-level)
+2. Call `/init` before any `/connect` calls
+3. Remove misleading "Powered by Claude" default — make BYOK the only option
+4. Show errors on connection failures
+
+**Files:** `app/src/pages/OnboardingPage.tsx`, `app/src/stores/settings.ts`
+
+#### M9-T2: Engine Sidecar Reliability
+
+`findPython()` falls back to system Python on packaged builds with no deps. Health poll timeout too short. No crash recovery.
+
+**Scope:**
+1. First-launch check: create managed venv in `~/Library/Application Support/Compass/`, install deps
+2. Increase health poll timeout to 30s
+3. Show "Starting engine..." status in app
+4. Handle engine crash: detect exit, show restart prompt
+
+**Files:** `app/electron/engine-bridge.ts`, `app/electron/main.ts`, `app/src/App.tsx`
+
+#### M9-T3: End-to-End CLI Smoke Test
+
+**Scope:**
+1. `engine/tests/test_e2e_cli.py`: temp workspace → init → connect → ingest → reconcile → discover
+2. Mock LLM for CI, separate `@pytest.mark.slow` class for real API key
+3. Assert persistence files exist, structural validity of outputs
+
+**Files:** `engine/tests/test_e2e_cli.py` (new)
+
+#### M9-T4: MCP Server Validation
+
+**Scope:**
+1. Test `compass mcp-serve` starts and responds to MCP handshake
+2. Fix workspace resolution edge cases
+3. Verify `compass mcp install` writes correct config
+4. Rewrite `docs/mcp-setup.md` with tested instructions
+
+**Files:** `engine/compass/cli.py`, `engine/compass/mcp_server.py`, `docs/mcp-setup.md`
+
+#### M9-T5: Tighten Demo Narrative
+
+**Scope:**
+1. Audit sample data against connector `ingest()` for correct parsing
+2. Sharpen strategy doc sync priority so conflict is undeniable
+3. Add retention/churn data to analytics CSV
+4. Add more support tickets with quotable complaints
+
+**Files:** `demo/sample_data/` (strategy, analytics, support, code)
+
+### Definition of Done — M9
+
+- [ ] `compass demo` runs clean 5/5 times with real API key, surfaces HIGH-confidence sync conflict consistently
+- [ ] Onboarding wizard completes end-to-end: workspace → API key → sources → ingest → workspace page
+- [ ] MCP server works in Claude Code with documented setup instructions
+- [ ] `pytest tests/` (excluding slow) passes
+- [ ] Engine sidecar starts reliably with "Starting engine..." status visible
+
+### Dependency Graph
+
+```
+M9-T1 (Fix onboarding)     M9-T5 (Demo narrative)     M9-T2 (Engine sidecar)
+       │                          │                            │
+       ▼                          ▼                       (independent)
+M9-T3 (E2E smoke test)     M9-T4 (MCP validation)
+```
+
+---
+
+## M10: First 10 Users
+
+**Goal:** 10 PMs install Compass, run it on their real data, complete the pipeline. At least 5 return for a second use.
+
+**Why this shape:** M9 made it reliable. M10 makes it installable and usable by someone who isn't the developer.
+
+### Tasks
+
+#### M10-T1: Bulletproof `pip install`
+
+**Scope:**
+1. Verify `pyproject.toml` entry point works for non-editable install
+2. Pin dependency versions
+3. Enhance `compass doctor` with comprehensive checks
+4. Publish to PyPI as `compass-ai`
+
+**Files:** `engine/pyproject.toml`, `engine/compass/cli.py`
+
+#### M10-T2: "Your Product in 5 Minutes" Quickstart
+
+**Scope:**
+1. Rewrite `docs/quickstart.md` with tested exact commands
+2. Add `compass quickstart` interactive CLI command
+3. Minimal setup: 1 code repo + 1 docs folder + 1 CSV
+
+**Files:** `docs/quickstart.md`, `engine/compass/cli.py`
+
+#### M10-T3: Connector Robustness
+
+**Scope:**
+1. GitHubConnector: binary files, symlinks, .gitignore
+2. AnalyticsConnector: delimiter detection, .xlsx support
+3. InterviewConnector: .docx, non-UTF-8 encoding
+4. DocsConnector: nested dirs, .pdf support
+5. All: per-file error handling, --verbose flag
+
+**Files:** `engine/compass/connectors/` (all), `engine/pyproject.toml`
+
+#### M10-T4: macOS .dmg That Works
+
+**Scope:**
+1. Fix extraResources engine bundling
+2. Integrate first-launch bootstrap from M9-T2
+3. Self-sign for development distribution
+4. Test on clean Mac end-to-end
+
+**Files:** `app/package.json`, `app/electron/engine-bridge.ts`, `app/build/entitlements.mac.plist`
+
+### Definition of Done — M10
+
+- [ ] `pip install compass-ai && compass doctor && compass demo` works in fresh Python 3.11+ venv
+- [ ] PM follows quickstart → first `compass discover` in <5 minutes with their own data
+- [ ] Connectors handle 3+ real-world data variations without crashing
+- [ ] .dmg installs and runs on a clean Mac without developer help
+- [ ] 10 PMs installed. 5 completed pipeline. 3 used it twice.
+
+### Dependency Graph
+
+```
+M10-T1 (pip install)     M10-T3 (Connector robustness)     M10-T4 (.dmg)
+       │                          │                               │
+       ▼                          │                          (independent)
+M10-T2 (Quickstart)              │
+```
+
+---
+
+## M11: Prove Value
+
+**Goal:** Compass surfaces insights PMs didn't already know. Output quality is the moat. Users recommend it to other PMs.
+
+**Why this matters:** A reliable tool that produces generic output is worthless. The value proposition is "Compass found something you missed." This milestone makes that true consistently.
+
+### Tasks
+
+#### M11-T1: Insight Quality Feedback ("Surprise Score")
+
+**Scope:**
+1. After `compass discover`, prompt: "Which surprised you?" → `.compass/feedback.json`
+2. In app: thumbs up / star (new insight) / thumbs down on each opportunity
+3. `compass quality`: aggregate stats across runs
+
+**Files:** `engine/compass/cli.py`, `app/src/components/discover/OpportunityCard.tsx`, `engine/compass/engine/history.py`
+
+#### M11-T2: Cross-Run Insight Tracking
+
+**Scope:**
+1. Append each discovery run to `.compass/discovery_history.json`
+2. Compare: flag `[NEW]`, `[PERSISTENT x3]`, `[RESOLVED]`
+3. `compass history`: evolution over last N runs
+4. Timeline view in app Discover page
+
+**Files:** `engine/compass/engine/history.py`, `engine/compass/engine/discoverer.py`, `engine/compass/cli.py`, `app/src/pages/DiscoverPage.tsx`
+
+#### M11-T3: Evidence Traceability
+
+**Scope:**
+1. `compass evidence <id>`: full item with metadata
+2. Clickable citations in app → navigate to evidence
+3. Source chain in specs: task → opportunity → conflict → evidence
+4. `GET /evidence/<id>` endpoint
+
+**Files:** `engine/compass/cli.py`, `engine/compass/server.py`, `app/src/components/discover/OpportunityCard.tsx`
+
+#### M11-T4: Prompt Tuning Pipeline
+
+**Scope:**
+1. Extract prompts to `engine/compass/prompts/` with versions
+2. Record prompt version per run alongside quality feedback
+3. `test_prompt_regression.py`: compare old vs new prompts
+4. `compass discover --prompt-version=v2` for A/B testing
+
+**Files:** `engine/compass/prompts/` (new), reconciler.py, discoverer.py, specifier.py
+
+#### M11-T5: Shareable Insight Report
+
+**Scope:**
+1. `compass report`: polished markdown report
+2. `compass report --format=html`: self-contained HTML
+3. "Export Report" button in app Discover page
+
+**Files:** `engine/compass/cli.py`, `engine/compass/engine/reporter.py` (new), `app/src/pages/DiscoverPage.tsx`
+
+### Definition of Done — M11
+
+- [ ] 30%+ opportunities rated as "new insight" across user sessions
+- [ ] Cross-run tracking works across 3+ runs for 5+ users
+- [ ] Every spec claim traceable to evidence in 2 clicks
+- [ ] Prompt changes testable against regression suite
+- [ ] 2+ PMs shared a Compass report with their team
+- [ ] 1+ PM recommended Compass unprompted
+
+### Dependency Graph
+
+```
+M11-T1 (Surprise score)     M11-T3 (Traceability)     M11-T5 (Report)
+       │                          │                     (independent)
+       ▼                          │
+M11-T4 (Prompt tuning)           │
+       │                          │
+       └──────────┬───────────────┘
+                  ▼
+M11-T2 (Cross-run tracking)
+```
+
+---
+
 ## Execution Strategy
 
 ### The critical path
 
 ```
-M0 (engine) → M1 (intelligence) → M2 (demo) → M3 (MCP) → M4 (app) → M5 (beta)
-                                                                          ↓
-                                                    M6 (connectors) → M7 (cloud) → M8 (scale)
+M0-M8 (Build Phase) → M9 (Make It Real) → M10 (First Users) → M11 (Prove Value)
 ```
 
-**M0 through M5 is the YC path:** 14 weeks from prototype to validated product with 10 real users.
+**M0 through M8:** Feature breadth — engine, intelligence, demo, MCP, app, beta infra, connectors, cloud scaffolding, scale scaffolding. ✅ Complete.
 
-**M6 through M8 is the growth path:** connectors, revenue, scale.
+**M9 through M11:** Depth phase — reliability, distribution, proof of value.
 
 ### Parallel execution
 
-| Phase | Milestones | Max Agents | Calendar |
-|-------|-----------|-----------|----------|
-| Foundation | M0 (6 tasks) | 3 parallel | Week 1 |
-| Intelligence | M1 (7 tasks) | 3 parallel | Weeks 2-3 |
-| Demo | M2 (5 tasks) | 2 parallel | Week 4 |
-| MCP | M3 (4 tasks) | 2 parallel | Weeks 5-6 |
-| App | M4 (5 tasks) | 3 parallel | Weeks 7-9 |
-| Beta | M5 (5 tasks) | 2 parallel + ops | Weeks 10-14 |
-| Polish | M6 (5 tasks) | 3 parallel | Months 4-5 |
-| Cloud | M7 (4 tasks) | 2 sequential | Months 6-8 |
-| Scale | M8 (6 tasks) | 3 parallel | Months 9-12 |
+| Phase | Milestones | Tasks | Status |
+|-------|-----------|-------|--------|
+| Foundation | M0 (6 tasks) | Engine reliability | ✅ Complete |
+| Intelligence | M1 (7 tasks) | AI output quality | ✅ Complete |
+| Demo | M2 (5 tasks) | Killer demo | ✅ Complete |
+| MCP | M3 (4 tasks) | MCP server | ✅ Complete |
+| App | M4 (5 tasks) | Electron app | ✅ Complete |
+| Beta | M5 (5 tasks) | Distribution infra | ✅ Complete |
+| Polish | M6 (5 tasks) | Connectors | ✅ Complete |
+| Cloud | M7 (4 tasks) | Cloud scaffolding | ✅ Complete |
+| Scale | M8 (6 tasks) | Enterprise scaffolding | ✅ Complete |
+| **Make It Real** | **M9 (5 tasks)** | **E2E reliability** | 🔄 Current |
+| **First Users** | **M10 (4 tasks)** | **Real-world distribution** | Planned |
+| **Prove Value** | **M11 (5 tasks)** | **Insight quality** | Planned |
 
-### Total: 47 tasks across 9 milestones
+### Total: 61 tasks across 12 milestones
 
 ### What success looks like
 
@@ -810,9 +1040,9 @@ M0 (engine) → M1 (intelligence) → M2 (demo) → M3 (MCP) → M4 (app) → M5
 |----------|----------|----------|----------|----------|
 | "It doesn't break" | "It's actually useful" | "Watch this" | "It works in Cursor" | "There's an app" |
 
-| After M5 | After M6 | After M7 | After M8 |
-|----------|----------|----------|----------|
-| "10 PMs use it" | "It connects to everything" | "People pay for it" | "Teams depend on it" |
+| After M5-M8 | After M9 | After M10 | After M11 |
+|-------------|----------|-----------|-----------|
+| "Infrastructure exists" | "It actually works" | "10 PMs use it" | "They tell other PMs" |
 
 ### Interfaces and their roles
 
