@@ -5,12 +5,11 @@ This covers: /health, /init, /connect, /ingest, /evidence, /configure.
 """
 
 import os
-import json
 
 import pytest
 from fastapi.testclient import TestClient
 
-from compass.server import app, _kg, _kg_workspace_path
+from compass.server import app
 import compass.server as server_module
 
 

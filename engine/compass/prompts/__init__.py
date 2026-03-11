@@ -9,6 +9,8 @@ from __future__ import annotations
 from compass.prompts.reconcile_v1 import SYSTEM as RECONCILE_V1_SYSTEM, PROMPT as RECONCILE_V1_PROMPT
 from compass.prompts.discover_v1 import SYSTEM as DISCOVER_V1_SYSTEM, PROMPT as DISCOVER_V1_PROMPT
 from compass.prompts.specify_v1 import SYSTEM as SPECIFY_V1_SYSTEM, PROMPT as SPECIFY_V1_PROMPT
+from compass.prompts.write_brief_v1 import SYSTEM as WRITE_BRIEF_V1_SYSTEM, PROMPT as WRITE_BRIEF_V1_PROMPT
+from compass.prompts.write_update_v1 import SYSTEM as WRITE_UPDATE_V1_SYSTEM, PROMPT as WRITE_UPDATE_V1_PROMPT
 
 # Default prompt version
 DEFAULT_VERSION = "v1"
@@ -23,6 +25,12 @@ REGISTRY: dict[str, dict[str, dict[str, str]]] = {
     },
     "specify": {
         "v1": {"system": SPECIFY_V1_SYSTEM, "prompt": SPECIFY_V1_PROMPT},
+    },
+    "write_brief": {
+        "v1": {"system": WRITE_BRIEF_V1_SYSTEM, "prompt": WRITE_BRIEF_V1_PROMPT},
+    },
+    "write_update": {
+        "v1": {"system": WRITE_UPDATE_V1_SYSTEM, "prompt": WRITE_UPDATE_V1_PROMPT},
     },
 }
 

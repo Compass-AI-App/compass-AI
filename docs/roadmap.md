@@ -1003,17 +1003,266 @@ M11-T2 (Cross-run tracking)
 
 ---
 
+## M12: Evidence-Grounded Writing
+
+**Goal:** PMs write briefs, updates, and PRDs grounded in actual evidence — not vibes. Every document cites real data from connected sources.
+
+**Why now:** Writing is the highest-frequency PM activity. Evidence grounding is the clearest differentiator vs. generic AI writing tools.
+
+### Tasks
+
+#### M12-T1: Writer Engine Component
+
+Add `engine/compass/engine/writer.py` with `Writer` class following the established engine pattern (constructor takes KG + model + prompt_version).
+
+**Scope:**
+1. `write_brief(opportunity_title)` — queries KG for evidence related to the opportunity, generates a structured product brief with problem statement, proposed solution, requirements (P0/P1/P2), success metrics, and evidence citations
+2. `write_update(days=7)` — queries recent evidence by timestamp, runs lightweight source comparison, generates stakeholder update with changes by source type, new signals, risks, and next steps
+3. Both methods use versioned prompts from the registry
+
+**Files:** `engine/compass/engine/writer.py` (new), `engine/compass/prompts/write_brief_v1.py` (new), `engine/compass/prompts/write_update_v1.py` (new)
+
+#### M12-T2: Document Models
+
+Pydantic models for writer output.
+
+**Scope:**
+1. `ProductBrief` — title, problem_statement, proposed_solution, requirements (list with priority), success_metrics, evidence_citations, target_audience, risks
+2. `StakeholderUpdate` — period, summary, changes_by_source (dict), new_signals (list), risks (list), next_steps (list), evidence_freshness
+3. Helper for rendering both as markdown
+
+**Files:** `engine/compass/models/documents.py` (new)
+
+#### M12-T3: CLI + API + MCP Endpoints
+
+Expose writer through all interfaces.
+
+**Scope:**
+1. CLI: `compass write-brief <opportunity>`, `compass write-update --since 7d`
+2. HTTP: `POST /write/brief`, `POST /write/update`
+3. MCP: `compass_write_brief(title)`, `compass_write_update(days)`
+4. All return markdown by default, structured JSON with `--format json`
+
+**Files:** `engine/compass/cli.py`, `engine/compass/server.py`, `engine/compass/mcp_server.py`
+
+#### M12-T4: App Integration
+
+**Scope:**
+1. "Write Brief" button on OpportunityCard (next to "Generate Spec")
+2. "Write Update" button on workspace page header
+3. Both open a document viewer (reuse SpecView pattern with markdown rendering)
+4. Add "writer" agent mode to chat store and server
+
+**Files:** `app/src/components/discover/OpportunityCard.tsx`, `app/src/pages/WorkspacePage.tsx`, `app/src/stores/chat.ts`, `engine/compass/server.py`
+
+### Definition of Done — M12
+
+- [ ] `compass write-brief "opportunity"` generates a brief citing evidence from the KG
+- [ ] `compass write-update --since 7d` generates a stakeholder update with changes by source
+- [ ] Brief includes P0/P1/P2 requirements and success metrics
+- [ ] Update includes evidence freshness ("Data source last refreshed 3 days ago")
+- [ ] Both available via CLI, HTTP API, MCP tool, and Electron app
+- [ ] Writer chat agent mode works in ChatPage
+
+### Dependency Graph
+
+```
+M12-T1 (Writer engine)  ──→  M12-T3 (CLI + API + MCP)
+       │                              │
+       ▼                              ▼
+M12-T2 (Document models)     M12-T4 (App integration)
+```
+
+T1 and T2 are independent. T3 depends on T1+T2. T4 depends on T3.
+
+---
+
+## M13: Deep Devil's Advocate
+
+**Goal:** Structured stress-testing of opportunities against real evidence. Not just a system prompt — a full engine that finds contradictions, gaps, and assumptions.
+
+### Tasks
+
+#### M13-T1: Challenger Engine
+
+**Scope:**
+1. `challenge(opportunity_title)` — finds evidence that contradicts the opportunity, identifies assumptions not backed by any source, checks evidence staleness, surfaces risks from conflict history
+2. Queries KG for both supporting AND contradicting evidence
+3. Cross-references with conflict report to find related unresolved conflicts
+
+**Files:** `engine/compass/engine/challenger.py` (new), `engine/compass/prompts/challenge_v1.py` (new)
+
+#### M13-T2: Challenge Model
+
+**Scope:**
+1. `Challenge` — weaknesses (list), missing_evidence (list), assumptions (list), risks (list), evidence_quality_score (float), contradicting_evidence (list of evidence IDs)
+2. Markdown rendering with severity indicators
+
+**Files:** `engine/compass/models/challenges.py` (extend existing or new)
+
+#### M13-T3: CLI + API + MCP
+
+**Scope:**
+1. CLI: `compass challenge <opportunity>`
+2. HTTP: `POST /challenge`
+3. MCP: `compass_challenge(opportunity_title)`
+
+**Files:** `engine/compass/cli.py`, `engine/compass/server.py`, `engine/compass/mcp_server.py`
+
+#### M13-T4: App Integration
+
+**Scope:**
+1. "Challenge" button on each OpportunityCard
+2. Challenge results shown as slide-over panel (similar to SpecView)
+3. Contradicting evidence items are clickable (link to EvidencePage)
+
+**Files:** `app/src/components/discover/OpportunityCard.tsx`, `app/src/components/discover/ChallengeView.tsx` (new)
+
+### Definition of Done — M13
+
+- [ ] Challenging an opportunity surfaces specific contradicting evidence
+- [ ] Missing evidence gaps are identified ("No user data supports this claim")
+- [ ] Assumptions listed with which sources they rely on
+- [ ] Evidence quality score reflects staleness and coverage
+
+### Dependency Graph
+
+```
+M13-T1 (Challenger engine)  ──→  M13-T3 (CLI + API + MCP)
+       │                                  │
+       ▼                                  ▼
+M13-T2 (Challenge model)         M13-T4 (App integration)
+```
+
+---
+
+## M14: Experiment Design
+
+**Goal:** Natural extension of "build X" to "validate X first." Every opportunity gets a testable hypothesis and experiment design grounded in actual metrics.
+
+### Tasks
+
+#### M14-T1: Experimenter Engine
+
+**Scope:**
+1. `design_experiment(opportunity_title)` — uses data-source evidence to suggest baseline metrics, estimate effect sizes, recommend experiment type (A/B test, feature flag, user study)
+2. Pulls analytics evidence to ground sample size and duration estimates in real data
+
+**Files:** `engine/compass/engine/experimenter.py` (new), `engine/compass/prompts/experiment_v1.py` (new)
+
+#### M14-T2: Experiment Model
+
+**Scope:**
+1. `ExperimentDesign` — hypothesis, experiment_type, primary_metric, guardrail_metrics, sample_size, duration_estimate, success_criteria, risks, evidence_citations
+
+**Files:** `engine/compass/models/experiments.py` (new)
+
+#### M14-T3: CLI + API + MCP
+
+`compass experiment <opportunity>`, `POST /experiment`, `compass_experiment` MCP tool.
+
+**Files:** `engine/compass/cli.py`, `engine/compass/server.py`, `engine/compass/mcp_server.py`
+
+#### M14-T4: App Integration
+
+"Design Experiment" button in SpecView after generating a spec.
+
+**Files:** `app/src/components/discover/SpecView.tsx`, `app/src/components/discover/ExperimentView.tsx` (new)
+
+### Definition of Done — M14
+
+- [ ] `compass experiment "opportunity"` generates experiment design with hypothesis and metrics
+- [ ] Sample size grounded in ingested analytics data when available
+- [ ] Experiment type recommendation with rationale
+
+---
+
+## M15: Planning & Enhanced Chat
+
+**Goal:** Compass becomes the first thing PMs open in the morning. Weekly planning dashboard synthesizes everything that changed across sources.
+
+### Tasks
+
+#### M15-T1: Planner Engine
+
+**Scope:**
+1. `plan_week()` — synthesizes cross-run tracking deltas, evidence freshness, open opportunities with confidence trends, unresolved conflicts
+2. Returns structured weekly plan with focus areas and suggested actions
+
+**Files:** `engine/compass/engine/planner.py` (new), `engine/compass/prompts/plan_week_v1.py` (new)
+
+#### M15-T2: Weekly Plan Model
+
+`WeeklyPlan` with `focus_areas[]`, `stale_sources[]`, `new_signals[]`, `confidence_changes[]`, `suggested_actions[]`
+
+**Files:** `engine/compass/models/planning.py` (new)
+
+#### M15-T3: Meeting Prep Chat Mode
+
+Enhanced agent mode that pulls product state, recent conflicts, open opportunities into meeting prep context. "Prep me for the eng sync about sync reliability."
+
+**Files:** `engine/compass/server.py`, `app/src/stores/chat.ts`
+
+#### M15-T4: App Dashboard Widget
+
+Weekly plan as the workspace landing experience. Replace empty state with actionable summary.
+
+**Files:** `app/src/pages/WorkspacePage.tsx`, `app/src/components/workspace/WeeklyPlan.tsx` (new)
+
+### Definition of Done — M15
+
+- [ ] Opening Compass shows weekly summary of what changed across sources
+- [ ] Stale sources flagged with "last refreshed N days ago"
+- [ ] Meeting prep mode produces context-aware talking points
+- [ ] `compass plan-week` CLI command works
+
+---
+
+## M16: Data Analysis
+
+**Goal:** PMs go from "the data says X" to actually querying and exploring the data, with evidence context guiding what to look for.
+
+### Tasks
+
+#### M16-T1: Analyst Engine
+
+`analyze(question)` and `interpret_metrics(evidence_ids)` — deeper metric interpretation from ingested analytics.
+
+**Files:** `engine/compass/engine/analyst.py` (new), `engine/compass/prompts/analyze_data_v1.py` (new)
+
+#### M16-T2: SQL Generation
+
+If analytics evidence contains structured data, generate investigative queries. "Your conflict says usage is declining — here's the query to check."
+
+**Files:** `engine/compass/engine/analyst.py`
+
+#### M16-T3: App Integration
+
+Data analyst chat mode with metric interpretation output.
+
+**Files:** `engine/compass/server.py`, `app/src/stores/chat.ts`
+
+### Definition of Done — M16
+
+- [ ] PM asks "why is retention dropping?" and gets evidence-grounded analysis
+- [ ] Suggested queries generated when analytics data is available
+- [ ] Data analyst chat mode works in app
+
+---
+
 ## Execution Strategy
 
 ### The critical path
 
 ```
-M0-M8 (Build Phase) → M9 (Make It Real) → M10 (First Users) → M11 (Prove Value)
+M0-M8 (Build) → M9-M11 (Depth) → M12-M16 (Full PM Toolkit)
 ```
 
 **M0 through M8:** Feature breadth — engine, intelligence, demo, MCP, app, beta infra, connectors, cloud scaffolding, scale scaffolding. ✅ Complete.
 
-**M9 through M11:** Depth phase — reliability, distribution, proof of value.
+**M9 through M11:** Depth phase — reliability, distribution, proof of value. ✅ Complete.
+
+**M12 through M16:** PM toolkit phase — evidence-grounded writing, stress-testing, experiment design, planning, data analysis.
 
 ### Parallel execution
 
@@ -1028,11 +1277,16 @@ M0-M8 (Build Phase) → M9 (Make It Real) → M10 (First Users) → M11 (Prove V
 | Polish | M6 (5 tasks) | Connectors | ✅ Complete |
 | Cloud | M7 (4 tasks) | Cloud scaffolding | ✅ Complete |
 | Scale | M8 (6 tasks) | Enterprise scaffolding | ✅ Complete |
-| **Make It Real** | **M9 (5 tasks)** | **E2E reliability** | 🔄 Current |
-| **First Users** | **M10 (4 tasks)** | **Real-world distribution** | Planned |
-| **Prove Value** | **M11 (5 tasks)** | **Insight quality** | Planned |
+| Make It Real | M9 (5 tasks) | E2E reliability | ✅ Complete |
+| First Users | M10 (4 tasks) | Real-world distribution | ✅ Complete |
+| Prove Value | M11 (5 tasks) | Insight quality | ✅ Complete |
+| **Writing** | **M12 (4 tasks)** | **Evidence-grounded writing** | 🔄 Current |
+| **Challenge** | **M13 (4 tasks)** | **Deep devil's advocate** | Planned |
+| **Experiments** | **M14 (4 tasks)** | **Experiment design** | Planned |
+| **Planning** | **M15 (4 tasks)** | **Weekly planning & chat** | Planned |
+| **Analysis** | **M16 (3 tasks)** | **Data analysis** | Planned |
 
-### Total: 61 tasks across 12 milestones
+### Total: 80 tasks across 17 milestones
 
 ### What success looks like
 
@@ -1043,6 +1297,10 @@ M0-M8 (Build Phase) → M9 (Make It Real) → M10 (First Users) → M11 (Prove V
 | After M5-M8 | After M9 | After M10 | After M11 |
 |-------------|----------|-----------|-----------|
 | "Infrastructure exists" | "It actually works" | "10 PMs use it" | "They tell other PMs" |
+
+| After M12 | After M13 | After M14 | After M15-M16 |
+|-----------|-----------|-----------|---------------|
+| "It writes my briefs" | "It catches my blind spots" | "It designs my experiments" | "It runs my week" |
 
 ### Interfaces and their roles
 

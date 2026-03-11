@@ -1,7 +1,6 @@
 """Tests for the 5 evidence connectors: GitHub, Docs, Analytics, Interviews, Support."""
 
 import csv
-from pathlib import Path
 
 import pytest
 

@@ -39,3 +39,7 @@ app/out/
 .idea/
 *.swp
 *.swo
+
+# Claude Code
+.claude/
+LOOP_PROMPT.md
