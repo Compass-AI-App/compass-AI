@@ -17,8 +17,8 @@ const sourceColors: Record<SourceType, { text: string; bg: string }> = {
   judgment: { text: "text-compass-judgment", bg: "bg-compass-judgment/10" },
 };
 
-export default function EvidenceCard({ evidence }: { evidence: Evidence }) {
-  const [expanded, setExpanded] = useState(false);
+export default function EvidenceCard({ evidence, defaultExpanded = false }: { evidence: Evidence; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const Icon = sourceIcons[evidence.source_type] || FileText;
   const colors = sourceColors[evidence.source_type];
 

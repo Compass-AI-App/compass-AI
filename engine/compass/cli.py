@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -534,6 +535,74 @@ def _ask_interactive(kg, config, compass_dir: Path):
 
         history.append({"question": question, "answer": response_text})
         history_path.write_text(json.dumps(history, indent=2))
+
+
+# --- evidence ---
+
+@app.command()
+def evidence(
+    evidence_id: str = typer.Argument("", help="Evidence item ID to look up (leave empty to list all)"),
+):
+    """Show evidence items. Pass an ID to see full details, or omit to list all."""
+    from compass.engine.knowledge_graph import KnowledgeGraph
+
+    compass_dir = get_compass_dir()
+    kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+
+    if not evidence_id:
+        # List all evidence
+        if len(kg) == 0:
+            console.print("[yellow]No evidence ingested yet.[/yellow]")
+            return
+
+        table = Table(title=f"Evidence ({len(kg)} items)")
+        table.add_column("ID", style="dim", max_width=12)
+        table.add_column("Type", style="bold")
+        table.add_column("Source")
+        table.add_column("Title", max_width=50)
+
+        for e in kg.store.items:
+            color = SOURCE_COLORS.get(e.source_type.value, "white")
+            table.add_row(
+                e.id[:12] + "...",
+                f"[{color}]{e.source_type.value}[/{color}]",
+                e.connector,
+                e.title[:50],
+            )
+        console.print(table)
+        return
+
+    # Look up by ID (support partial match)
+    item = kg.get_by_id(evidence_id)
+    if not item:
+        # Try partial match
+        matches = [e for e in kg.store.items if e.id.startswith(evidence_id)]
+        if len(matches) == 1:
+            item = matches[0]
+        elif len(matches) > 1:
+            console.print(f"[yellow]Multiple matches for '{evidence_id}':[/yellow]")
+            for m in matches:
+                console.print(f"  {m.id} — {m.title}")
+            return
+        else:
+            console.print(f"[red]No evidence item found with ID '{evidence_id}'[/red]")
+            return
+
+    # Display full evidence item
+    color = SOURCE_COLORS.get(item.source_type.value, "white")
+    console.print(Panel(
+        f"[bold]{item.title}[/bold]\n\n"
+        f"[dim]ID:[/dim] {item.id}\n"
+        f"[dim]Type:[/dim] [{color}]{item.source_type.value}[/{color}]\n"
+        f"[dim]Source:[/dim] {item.connector}\n"
+        f"[dim]Timestamp:[/dim] {item.timestamp}\n"
+        + (f"[dim]Ingested:[/dim] {item.ingested_at}\n" if item.ingested_at else "")
+        + (f"[dim]Source name:[/dim] {item.source_name}\n" if item.source_name else "")
+        + f"\n[dim]Metadata:[/dim] {json.dumps(item.metadata, indent=2)}\n"
+        f"\n--- Content ---\n\n{item.content}",
+        title=f"Evidence: {item.id[:16]}...",
+        border_style=color,
+    ))
 
 
 # --- status ---

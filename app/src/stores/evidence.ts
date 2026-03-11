@@ -7,11 +7,13 @@ interface EvidenceState {
   error: string | null;
   filter: SourceType | null;
   searchQuery: string;
+  highlightId: string | null;
 
   setItems: (items: Evidence[]) => void;
   setLoading: (v: boolean) => void;
   setFilter: (f: SourceType | null) => void;
   setSearchQuery: (q: string) => void;
+  setHighlightId: (id: string | null) => void;
   fetchEvidence: (workspacePath: string) => Promise<void>;
 }
 
@@ -21,11 +23,13 @@ export const useEvidenceStore = create<EvidenceState>((set) => ({
   error: null,
   filter: null,
   searchQuery: "",
+  highlightId: null,
 
   setItems: (items) => set({ items }),
   setLoading: (loading) => set({ loading }),
   setFilter: (filter) => set({ filter }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
+  setHighlightId: (highlightId) => set({ highlightId }),
 
   fetchEvidence: async (workspacePath: string) => {
     set({ loading: true, error: null });

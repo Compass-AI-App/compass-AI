@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, FileCode2, Loader2, ThumbsUp, Star, ThumbsDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronRight, Database, FileCode2, Loader2, ThumbsUp, Star, ThumbsDown } from "lucide-react";
 import { clsx } from "clsx";
 import type { Opportunity, Confidence } from "../../types/engine";
 import { useWorkspaceStore } from "../../stores/workspace";
@@ -22,6 +23,7 @@ export default function OpportunityCard({ opportunity, onGenerateSpec, specLoadi
   const [expanded, setExpanded] = useState(false);
   const [rating, setRating] = useState<Rating>(null);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
+  const navigate = useNavigate();
 
   async function handleRate(r: Rating) {
     if (!r || !workspacePath) return;
@@ -76,6 +78,28 @@ export default function OpportunityCard({ opportunity, onGenerateSpec, specLoadi
             <div>
               <p className="text-xs font-medium text-compass-muted mb-1">Estimated Impact</p>
               <p className="text-sm text-neutral-400">{opportunity.estimated_impact}</p>
+            </div>
+          )}
+          {opportunity.evidence_ids && opportunity.evidence_ids.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-compass-muted mb-1.5 flex items-center gap-1">
+                <Database className="w-3 h-3" /> Linked Evidence
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {opportunity.evidence_ids.map((eid) => (
+                  <button
+                    key={eid}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/evidence?id=${eid}`);
+                    }}
+                    className="text-xs px-2 py-1 rounded-md bg-compass-accent/10 text-compass-accent hover:bg-compass-accent/20 transition-colors font-mono"
+                    title={`View evidence: ${eid}`}
+                  >
+                    {eid.slice(0, 12)}...
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <div className="flex items-center justify-between">
