@@ -541,6 +541,32 @@ def compass_challenge(opportunity_title: str) -> str:
 
 
 @mcp.tool()
+def compass_analyze(question: str) -> str:
+    """Analyze a product question using data evidence from the knowledge graph.
+
+    Interprets metrics, identifies trends, suggests investigative SQL queries,
+    and connects data findings to product implications.
+
+    Args:
+        question: Product question to analyze (e.g., "Why is retention dropping?")
+    """
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
+    kg = _get_kg(workspace)
+    if len(kg) == 0:
+        return "No evidence ingested. Run `compass ingest` first."
+
+    config = _get_config(workspace)
+    from compass.engine.analyst import Analyst
+
+    analyst = Analyst(kg, model=config.model)
+    result = analyst.analyze(question)
+    return result.to_markdown()
+
+
+@mcp.tool()
 def compass_plan_week() -> str:
     """Generate a weekly plan synthesized from all product evidence.
 
