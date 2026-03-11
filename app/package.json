@@ -55,11 +55,19 @@
         "filter": [
           "compass/**/*",
           "pyproject.toml",
+          "README.md",
           "!**/__pycache__",
           "!**/*.pyc",
           "!.venv/**/*",
           "!tests/**/*",
           "!*.egg-info/**/*"
+        ]
+      },
+      {
+        "from": "../demo",
+        "to": "demo",
+        "filter": [
+          "**/*"
         ]
       }
     ],
