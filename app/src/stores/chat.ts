@@ -14,7 +14,7 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export type AgentMode = "default" | "thought-partner" | "technical-analyst" | "devils-advocate" | "writer";
+export type AgentMode = "default" | "thought-partner" | "technical-analyst" | "devils-advocate" | "writer" | "meeting-prep" | "experiment-designer";
 
 interface ChatState {
   messages: ChatMessage[];

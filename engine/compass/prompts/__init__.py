@@ -13,6 +13,7 @@ from compass.prompts.write_brief_v1 import SYSTEM as WRITE_BRIEF_V1_SYSTEM, PROM
 from compass.prompts.write_update_v1 import SYSTEM as WRITE_UPDATE_V1_SYSTEM, PROMPT as WRITE_UPDATE_V1_PROMPT
 from compass.prompts.challenge_v1 import SYSTEM as CHALLENGE_V1_SYSTEM, PROMPT as CHALLENGE_V1_PROMPT
 from compass.prompts.experiment_v1 import SYSTEM as EXPERIMENT_V1_SYSTEM, PROMPT as EXPERIMENT_V1_PROMPT
+from compass.prompts.plan_week_v1 import SYSTEM as PLAN_WEEK_V1_SYSTEM, PROMPT as PLAN_WEEK_V1_PROMPT
 
 # Default prompt version
 DEFAULT_VERSION = "v1"
@@ -39,6 +40,9 @@ REGISTRY: dict[str, dict[str, dict[str, str]]] = {
     },
     "experiment": {
         "v1": {"system": EXPERIMENT_V1_SYSTEM, "prompt": EXPERIMENT_V1_PROMPT},
+    },
+    "plan_week": {
+        "v1": {"system": PLAN_WEEK_V1_SYSTEM, "prompt": PLAN_WEEK_V1_PROMPT},
     },
 }
 

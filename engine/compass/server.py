@@ -590,6 +590,34 @@ def challenge_endpoint(req: ChallengeRequest):
     }
 
 
+# ---------- Plan Week ----------
+
+class PlanWeekRequest(BaseModel):
+    workspace_path: str
+
+
+@app.post("/plan/week")
+def plan_week_endpoint(req: PlanWeekRequest):
+    base = Path(req.workspace_path)
+    config = load_config(base)
+    kg = _get_kg(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    from compass.engine.planner import Planner
+
+    planner = Planner(kg, model=config.model)
+    result = planner.plan_week(
+        compass_dir=compass_dir,
+        product_name=config.name,
+    )
+
+    return {
+        "status": "ok",
+        "markdown": result.to_markdown(),
+        "plan": result.model_dump(),
+    }
+
+
 # ---------- Experiment ----------
 
 class ExperimentRequest(BaseModel):
@@ -733,6 +761,15 @@ Ground everything in the evidence provided.""",
 briefs, stakeholder updates, emails, strategy docs. Ground every claim in specific evidence.
 Use clear structure: lead with the key insight, organize by priority, cite sources.
 Write in a professional but direct tone. Avoid fluff. Ground everything in evidence.""",
+    "meeting-prep": """You are Compass in Meeting Prep mode. Help the PM prepare for meetings
+by pulling together relevant product context. Summarize the current state of open opportunities,
+recent conflicts, and evidence that's relevant to the meeting topic. Anticipate questions
+stakeholders might ask and suggest talking points grounded in evidence. Structure your
+response as: key updates, risks to flag, questions to expect, and recommended framing.""",
+    "experiment-designer": """You are Compass in Experiment Designer mode. Help the PM design
+and refine validation experiments for product opportunities. Use evidence to suggest
+appropriate metrics, estimate baselines, recommend experiment types, and define success
+criteria. Challenge weak hypotheses constructively. Ground everything in evidence.""",
 }
 
 

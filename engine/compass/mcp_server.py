@@ -541,6 +541,34 @@ def compass_challenge(opportunity_title: str) -> str:
 
 
 @mcp.tool()
+def compass_plan_week() -> str:
+    """Generate a weekly plan synthesized from all product evidence.
+
+    Combines open opportunities, conflicts, evidence freshness, and discovery history
+    into an actionable weekly plan with focus areas and suggested next steps.
+    """
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
+    kg = _get_kg(workspace)
+    if len(kg) == 0:
+        return "No evidence ingested. Run `compass ingest` first."
+
+    config = _get_config(workspace)
+    from compass.engine.planner import Planner
+    from compass.config import get_compass_dir
+
+    compass_dir = get_compass_dir(workspace)
+    planner = Planner(kg, model=config.model)
+    result = planner.plan_week(
+        compass_dir=compass_dir,
+        product_name=config.name,
+    )
+    return result.to_markdown()
+
+
+@mcp.tool()
 def compass_experiment(opportunity_title: str) -> str:
     """Design a validation experiment for a product opportunity.
 

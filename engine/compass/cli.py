@@ -1162,6 +1162,45 @@ def experiment(
             console.print(content)
 
 
+# --- plan-week ---
+
+@app.command("plan-week")
+def plan_week(
+    output: str = typer.Option("", "--output", "-o", help="Write plan to file"),
+    format: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown or json"),
+):
+    """Generate a weekly plan synthesized from all product evidence."""
+    config = load_config()
+    compass_dir = get_compass_dir()
+
+    from compass.engine.planner import Planner
+
+    kg = _load_knowledge_graph(compass_dir)
+    if not kg:
+        return
+
+    planner = Planner(kg, model=config.model)
+    result = planner.plan_week(
+        compass_dir=compass_dir,
+        product_name=config.name,
+    )
+
+    if format == "json":
+        content = json.dumps(result.model_dump(), indent=2)
+    else:
+        content = result.to_markdown()
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(content)
+        console.print(f"[green]Weekly plan written to {out_path}[/green]")
+    else:
+        if format == "markdown":
+            console.print(Markdown(content))
+        else:
+            console.print(content)
+
+
 # --- write-brief ---
 
 @app.command("write-brief")
