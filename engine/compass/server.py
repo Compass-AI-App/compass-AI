@@ -402,6 +402,23 @@ def get_quality(req: WorkspaceRequest):
     return {"status": "ok", **stats}
 
 
+# ---------- Report ----------
+
+class ReportRequest(BaseModel):
+    workspace_path: str
+    format: str = "markdown"  # "markdown" or "html"
+
+
+@app.post("/report")
+def generate_report_endpoint(req: ReportRequest):
+    if req.format not in ("markdown", "html"):
+        raise HTTPException(400, f"Invalid format '{req.format}'. Use: markdown, html")
+
+    from compass.engine.reporter import generate_report
+    content = generate_report(Path(req.workspace_path), format=req.format)
+    return {"status": "ok", "format": req.format, "content": content}
+
+
 # ---------- Specify ----------
 
 @app.post("/specify")

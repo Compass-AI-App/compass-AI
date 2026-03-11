@@ -1,4 +1,5 @@
-import { Lightbulb, Loader2, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Download, Lightbulb, Loader2, Sparkles } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useOpportunitiesStore } from "../stores/opportunities";
@@ -19,8 +20,34 @@ export default function DiscoverPage() {
     setActiveSpec,
   } = useOpportunitiesStore();
 
+  const [exporting, setExporting] = useState(false);
+
   function handleGenerateSpec(title: string) {
     if (workspacePath) generateSpec(workspacePath, title);
+  }
+
+  async function handleExportReport() {
+    if (!workspacePath) return;
+    setExporting(true);
+    try {
+      const res = (await window.compass?.engine.call("/report", {
+        workspace_path: workspacePath,
+        format: "html",
+      })) as { content?: string } | undefined;
+      if (res?.content) {
+        const blob = new Blob([res.content], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "compass-report.html";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -56,6 +83,20 @@ export default function DiscoverPage() {
           )}
           {loading ? "Discovering..." : opportunities.length > 0 ? "Re-discover" : "Discover"}
         </button>
+        {opportunities.length > 0 && (
+          <button
+            onClick={handleExportReport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-compass-border text-compass-muted hover:text-compass-text hover:border-compass-text/30 transition-colors"
+          >
+            {exporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            Export Report
+          </button>
+        )}
       </div>
 
       {/* Error state */}

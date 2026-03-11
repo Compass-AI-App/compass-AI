@@ -912,6 +912,40 @@ def quality():
     console.print()
 
 
+# --- report ---
+
+@app.command()
+def report(
+    format: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown or html"),
+    output: str = typer.Option("", "--output", "-o", help="Write report to file instead of stdout"),
+):
+    """Generate a shareable product discovery report."""
+    from compass.engine.reporter import generate_report
+
+    workspace = Path.cwd()
+    try:
+        load_config(workspace)
+    except FileNotFoundError:
+        console.print("[red]No Compass workspace found in current directory.[/red]")
+        raise typer.Exit(1)
+
+    if format not in ("markdown", "html"):
+        console.print(f"[red]Invalid format '{format}'. Use: markdown, html[/red]")
+        raise typer.Exit(1)
+
+    content = generate_report(workspace, format=format)
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(content)
+        console.print(f"[green]Report written to {out_path}[/green]")
+    else:
+        if format == "markdown":
+            console.print(Markdown(content))
+        else:
+            console.print(content)
+
+
 # --- quickstart ---
 
 @app.command()
