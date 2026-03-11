@@ -42,6 +42,7 @@ def record_discovery(
     compass_dir: Path,
     opportunities: list[Opportunity],
     conflict_report: ConflictReport | None = None,
+    prompt_version: str = "v1",
 ) -> dict:
     """Record a discovery run in history. Returns the new entry."""
     entries = _load_history(compass_dir)
@@ -49,6 +50,7 @@ def record_discovery(
     entry = {
         "timestamp": datetime.now().isoformat(),
         "type": "discovery",
+        "prompt_version": prompt_version,
         "opportunity_count": len(opportunities),
         "conflict_count": len(conflict_report.conflicts) if conflict_report else 0,
         "opportunities": [

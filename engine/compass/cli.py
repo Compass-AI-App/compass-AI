@@ -229,7 +229,9 @@ def reconcile():
 # --- discover ---
 
 @app.command()
-def discover():
+def discover(
+    prompt_version: str = typer.Option("v1", "--prompt-version", "-P", help="Prompt version for A/B testing (e.g., v1, v2)"),
+):
     """Ask: 'What should we build next?' — evidence-grounded product discovery."""
     config = load_config()
     compass_dir = get_compass_dir()
@@ -243,11 +245,11 @@ def discover():
 
     # Run reconciliation first to feed into discovery
     console.print("[dim]Running reconciliation...[/dim]")
-    reconciler = Reconciler(kg, model=config.model)
+    reconciler = Reconciler(kg, model=config.model, prompt_version=prompt_version)
     conflict_report = reconciler.reconcile()
 
     console.print("[dim]Synthesizing opportunities...[/dim]")
-    discoverer = Discoverer(kg, model=config.model)
+    discoverer = Discoverer(kg, model=config.model, prompt_version=prompt_version)
     opportunities = discoverer.discover(conflict_report)
 
     if not opportunities:
@@ -283,7 +285,7 @@ def discover():
 
     # Record in history
     from compass.engine.history import record_discovery
-    record_discovery(compass_dir, opportunities, conflict_report)
+    record_discovery(compass_dir, opportunities, conflict_report, prompt_version=prompt_version)
 
 
 # --- specify ---
