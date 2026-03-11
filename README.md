@@ -2,122 +2,179 @@
 
 **Cursor for Product Managers.**
 
-AI-native product discovery that helps you figure out *what* to build, not just *how* to build it.
+[![CI](https://github.com/Compass-AI-App/compass-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Compass-AI-App/compass-AI/actions/workflows/ci.yml)
+[![Release](https://github.com/Compass-AI-App/compass-AI/actions/workflows/release.yml/badge.svg)](https://github.com/Compass-AI-App/compass-AI/releases)
+
+AI-native product discovery that connects to your product's evidence sources — code, docs, analytics, and user feedback — finds where they disagree, and generates agent-ready specifications.
+
+**[Website](https://compass-ai-app.github.io/compass-AI/)** | **[Download](https://github.com/Compass-AI-App/compass-AI/releases/latest)** | **[Quick Start](#quick-start)**
 
 ---
 
 ## The Problem
 
-Cursor and Claude Code help teams build software once it's clear what needs to be built. But the hardest part of building a product people want is figuring out **what to build in the first place**.
+Cursor and Claude Code accelerated how teams build. But someone still has to figure out **what** to build. Product managers juggle strategy docs, user interviews, analytics dashboards, support tickets, and code reality — often reaching different conclusions from each source. Compass reconciles all of them.
 
-Compass is the missing tool for that process.
+## Four Sources of Truth
 
-## How It Works
-
-Connect your product's evidence sources. Ask "what should we build next?" Get evidence-grounded recommendations with agent-ready specs.
-
-### The Four Sources of Truth
+Every product has four types of evidence that often contradict each other:
 
 | Source | Question | Examples |
 |--------|----------|----------|
-| **Code** | What CAN happen? | Codebase, APIs, architecture |
-| **Docs** | What's EXPECTED? | Strategy, roadmaps, PRDs |
-| **Data** | What IS happening? | Usage metrics, analytics, experiments |
-| **Judgment** | What SHOULD happen? | User interviews, support tickets, feedback |
+| **Code** | What *can* happen? | Repository structure, API surface, module age, test coverage |
+| **Docs** | What's *expected*? | Strategy docs, PRDs, roadmaps, design specs |
+| **Data** | What *is* happening? | Analytics, metrics, crash reports, usage patterns |
+| **Judgment** | What *should* happen? | User interviews, support tickets, stakeholder feedback |
 
 When these sources agree, things are working. When they disagree, that's where product opportunities hide.
 
+## How It Works
+
+```
+Connect → Ingest → Reconcile → Discover → Specify
+```
+
+1. **Connect** your evidence sources (local files, repos, CSVs, markdown)
+2. **Ingest** builds a knowledge graph with semantic embeddings
+3. **Reconcile** finds conflicts between sources (e.g., strategy says "mobile-first" but code investment says desktop)
+4. **Discover** synthesizes ranked opportunities with multi-source corroboration
+5. **Specify** generates agent-ready specs that Cursor and Claude Code can execute directly
+
 ### What You Get
 
-1. **Conflict Report** — Where your sources of truth disagree, ranked by severity
-2. **Opportunity Ranking** — Evidence-grounded recommendations for what to build
-3. **Agent-Ready Specs** — Feature specs formatted for Cursor / Claude Code with task breakdowns
+- **Conflict Report** — Where your sources of truth disagree, ranked by severity and signal strength
+- **Opportunity Ranking** — Evidence-grounded recommendations for what to build, with confidence levels
+- **Agent-Ready Specs** — Feature specs with task breakdowns, file paths, and acceptance criteria — formatted for Cursor or Claude Code
+
+## Quick Start
+
+### CLI
+
+```bash
+# Install
+cd engine && pip install -e ".[dev]"
+
+# Run the demo (ingests sample data, finds conflicts, discovers opportunities)
+compass demo
+
+# Or use with your own product
+export ANTHROPIC_API_KEY=sk-ant-...
+compass init "My Product"
+compass connect code ./src
+compass connect docs ./strategy/
+compass connect analytics ./metrics.csv
+compass ingest
+compass reconcile
+compass discover
+```
+
+### Desktop App
+
+Download the native app:
+
+- **[macOS (.dmg)](https://github.com/Compass-AI-App/compass-AI/releases/latest)**
+- **[Windows (.exe)](https://github.com/Compass-AI-App/compass-AI/releases/latest)**
+- **[Linux (.AppImage)](https://github.com/Compass-AI-App/compass-AI/releases/latest)**
+
+The app includes an onboarding wizard — create a workspace, enter your API key, connect sources, and start discovering.
+
+### MCP Integration (Claude Code / Cursor)
+
+```bash
+compass mcp install
+```
+
+Adds Compass tools to your AI assistant. Ask "what should we build next?" and get evidence-grounded recommendations without leaving your editor.
+
+Available tools: `compass_status`, `compass_ingest`, `compass_reconcile`, `compass_discover`, `compass_specify`, `compass_ask`, `compass_search`, `compass_refresh`.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│              Interfaces                      │
+│  Desktop App  │  CLI  │  MCP Server  │  API │
+└──────────────────┬──────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────┐
+│           Engine (Python / FastAPI)           │
+│                                              │
+│  Connectors → Knowledge Graph → Orchestrator │
+│  (GitHub,     (ChromaDB +      (Reconciler,  │
+│   Docs,       EvidenceStore)    Discoverer,   │
+│   Analytics,                    Specifier,    │
+│   Interviews,                   Chat)         │
+│   Support,                                    │
+│   Jira, Slack,                               │
+│   Linear, Notion)                            │
+└──────────────────────────────────────────────┘
+```
+
+- **Engine:** Python 3.11+, FastAPI, ChromaDB vectors, Pydantic models
+- **App:** Electron 33, React 19, TypeScript, Vite 6, Zustand, Tailwind CSS
+- **LLM:** BYOK (Bring Your Own Key) — uses your Anthropic API key directly. Cloud option available for managed access.
+
+## Chat Modes
+
+Compass includes multiple AI agent modes for different PM workflows:
+
+| Mode | Purpose |
+|------|---------|
+| **Default** | Evidence-grounded Q&A about your product |
+| **Thought Partner** | Brainstorm and explore ideas collaboratively |
+| **Technical Analyst** | Understand systems and architecture in PM terms |
+| **Devil's Advocate** | Stress-test assumptions and find blind spots |
 
 ## Project Structure
 
 ```
 compass-AI/
-├── app/                  # Electron + React Mac app
-│   ├── electron/         # Main process, preload, engine bridge
-│   └── src/              # React UI (Vite + TypeScript + Tailwind)
-├── engine/               # Python product discovery engine
-│   ├── compass/
-│   │   ├── models/       # Four sources data models
-│   │   ├── engine/       # KnowledgeGraph, Orchestrator, Reconciler, Discoverer, Specifier
-│   │   ├── connectors/   # GitHub, docs, analytics, interviews, support
-│   │   ├── server.py     # FastAPI server
-│   │   └── cli.py        # CLI interface
-│   └── pyproject.toml
-├── demo/                 # SyncFlow sample data + demo script
-├── cloud/                # Compass Cloud API (future)
-└── docs/                 # ADRs, specs, positioning
+├── engine/          # Python engine (FastAPI, connectors, KG, AI pipeline)
+│   ├── compass/     # Main package (server, cli, models, engine, connectors)
+│   └── tests/       # Engine tests
+├── app/             # Electron desktop app (React, TypeScript)
+│   ├── src/         # React components, pages, stores
+│   └── electron/    # Main process, preload, engine bridge
+├── cloud/           # Cloud API (auth, LLM proxy, Stripe billing)
+├── demo/            # Sample data for compass demo
+├── docs/            # Roadmap, specs, architecture decisions
+└── site/            # Landing page (GitHub Pages)
 ```
 
-## Quick Start
+## Development
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Node.js 20+
-- An Anthropic API key
+- An Anthropic API key (for LLM features)
 
 ### Setup
 
 ```bash
-git clone https://github.com/your-org/compass-AI.git
-cd compass-AI
-make setup
+# Engine
+cd engine
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+
+# App
+cd app
+npm ci
+npm run dev
 ```
 
-### Set API Key
+### Run just the engine
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+cd engine && uvicorn compass.server:app --port 9811
 ```
 
-### Run the App
-
-```bash
-make dev
-```
-
-This starts the Electron app, which auto-launches the Python engine server.
-
-### Run the CLI Demo
-
-```bash
-make demo
-```
-
-Runs Compass against a fictional product (SyncFlow) with realistic evidence. See [demo/README.md](demo/README.md) for details.
-
-### Run Just the Engine
-
-```bash
-make engine
-```
-
-Starts the FastAPI server on port 9811. API docs at http://localhost:9811/docs.
-
-## CLI Usage
-
-```bash
-compass init "My Product"
-compass connect github --path ./my-repo
-compass connect docs --path ./strategy/
-compass connect analytics --path ./metrics.csv
-compass connect interviews --path ./user-research/
-compass connect support --path ./tickets.csv
-
-compass ingest        # Index all evidence
-compass reconcile     # Find where sources disagree
-compass discover      # "What should we build next?"
-compass specify       # Generate agent-ready feature specs
-```
+API docs at http://localhost:9811/docs.
 
 ## Philosophy
 
-PM work is reconciling four sources of truth. AI helps you explore each faster. Judgment stays human.
+Compass builds on the **[PM AI Partner Framework](https://github.com/ahmedkhaledmohamed/PM-AI-Partner-Framework)** — the idea that PM work is fundamentally about reconciling four sources of truth, and AI should augment that reconciliation rather than replace human judgment. The framework's agent modes (Thought Partner, Technical Analyst, Devil's Advocate) are embedded directly into Compass's chat interface, giving PMs structured ways to interrogate their product evidence.
 
 Compass is not "AI writes your PRDs." It's "AI helps you find what's true about your product, where the truths conflict, and what to do about it."
 
