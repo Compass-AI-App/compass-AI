@@ -944,7 +944,7 @@ def doctor(
 @app.command()
 def quality():
     """Show insight quality stats — how often Compass surprises you."""
-    from compass.engine.history import get_quality_stats, _load_feedback
+    from compass.engine.history import get_quality_stats
 
     compass_dir = get_compass_dir()
     stats = get_quality_stats(compass_dir)
@@ -1020,7 +1020,6 @@ def report(
 @app.command()
 def quickstart():
     """Interactive setup: init workspace, connect sources, ingest, discover — in 5 minutes."""
-    import time
     from datetime import datetime
 
     console.print(Panel(

@@ -12,7 +12,6 @@ from pathlib import Path
 
 from compass.config import load_config, get_compass_dir
 from compass.engine.knowledge_graph import KnowledgeGraph
-from compass.models.sources import SourceType
 
 
 def generate_report(workspace: Path, format: str = "markdown") -> str:
