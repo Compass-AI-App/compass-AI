@@ -870,6 +870,136 @@ def doctor(
         console.print(f"[yellow]{checks_passed} passed, {checks_failed} failed[/yellow]\n")
 
 
+# --- quickstart ---
+
+@app.command()
+def quickstart():
+    """Interactive setup: init workspace, connect sources, ingest, discover — in 5 minutes."""
+    import time
+    from datetime import datetime
+
+    console.print(Panel(
+        "[bold]Compass Quickstart[/bold]\n\n"
+        "This will walk you through setting up Compass with your own product data.\n"
+        "You'll need: a code repo, a docs folder, and optionally a metrics CSV.",
+        border_style="cyan",
+    ))
+    console.print()
+
+    # Step 1: Product name
+    product_name = typer.prompt("Product name", default="My Product")
+    product_desc = typer.prompt("Short description (optional)", default="")
+
+    # Step 2: Workspace directory
+    workspace_dir = Path.cwd()
+    use_cwd = typer.confirm(f"Use current directory as workspace? ({workspace_dir})", default=True)
+    if not use_cwd:
+        workspace_dir = Path(typer.prompt("Workspace directory path"))
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+
+    # Init
+    compass_dir = get_compass_dir(workspace_dir)
+    config = ProductConfig(name=product_name, description=product_desc)
+    save_config(config, workspace_dir)
+    console.print(f"\n[green]✓[/green] Workspace initialized: {workspace_dir}")
+
+    # Step 3: Connect sources interactively
+    source_prompts = [
+        ("code", "Code repository path (or Enter to skip)"),
+        ("docs", "Strategy/docs folder path (or Enter to skip)"),
+        ("analytics", "Analytics CSV/folder path (or Enter to skip)"),
+        ("interviews", "Interview notes folder path (or Enter to skip)"),
+        ("support", "Support tickets CSV/folder path (or Enter to skip)"),
+    ]
+
+    connected = 0
+    for source_type, prompt_text in source_prompts:
+        source_path = typer.prompt(f"\n{prompt_text}", default="").strip()
+        if not source_path:
+            continue
+
+        source_path_obj = Path(source_path).expanduser().resolve()
+        if not source_path_obj.exists():
+            console.print(f"  [yellow]Path not found: {source_path_obj}. Skipping.[/yellow]")
+            continue
+
+        source_name = f"{source_type}:{source_path_obj.name}"
+        source_config = SourceConfig(type=source_type, name=source_name, path=str(source_path_obj))
+        config.add_source(source_config)
+        save_config(config, workspace_dir)
+        console.print(f"  [green]✓[/green] Connected {source_type}: {source_path_obj.name}")
+        connected += 1
+
+    if connected == 0:
+        console.print("\n[yellow]No sources connected. Run 'compass connect' later to add sources.[/yellow]")
+        console.print("[dim]Or try 'compass demo' to see Compass with sample data.[/dim]")
+        return
+
+    # Step 4: Ingest
+    console.print(f"\n[bold]Ingesting evidence from {connected} sources...[/bold]")
+    from compass.connectors import get_connector
+    from compass.engine.knowledge_graph import KnowledgeGraph
+
+    kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+    kg.clear()
+
+    config = load_config(workspace_dir)
+    now = datetime.now()
+    total = 0
+    for source in config.sources:
+        try:
+            connector_cls = get_connector(source.type)
+            connector = connector_cls(source)
+            evidence = connector.ingest()
+            for ev in evidence:
+                ev.source_name = source.name
+                ev.ingested_at = now
+            kg.add_many(evidence)
+            console.print(f"  [green]✓[/green] {source.name}: {len(evidence)} items")
+            total += len(evidence)
+        except Exception as e:
+            console.print(f"  [red]✗[/red] {source.name}: {e}")
+
+    console.print(f"\n[bold]{total} evidence items[/bold] ingested.")
+
+    # Step 5: Run discovery?
+    if total > 0 and typer.confirm("\nRun discovery now? (requires ANTHROPIC_API_KEY)", default=True):
+        console.print("\n[bold]Running reconciliation + discovery...[/bold]")
+        try:
+            from compass.engine.reconciler import Reconciler
+            from compass.engine.discoverer import Discoverer
+
+            reconciler = Reconciler(kg, model=config.model)
+            report = reconciler.reconcile()
+            console.print(f"  Found [bold]{len(report.conflicts)}[/bold] conflicts")
+
+            discoverer = Discoverer(kg, model=config.model)
+            opportunities = discoverer.discover(report)
+            console.print(f"  Found [bold]{len(opportunities)}[/bold] opportunities\n")
+
+            if opportunities:
+                for opp in opportunities[:3]:
+                    console.print(Panel(
+                        f"[bold]{opp.title}[/bold]\n{opp.description[:200]}...\n\n"
+                        f"[dim]Confidence: {opp.confidence.value} | Impact: {opp.estimated_impact[:100]}[/dim]",
+                        border_style="green" if opp.confidence.value == "high" else "yellow",
+                    ))
+        except ValueError as e:
+            if "API_KEY" in str(e).upper():
+                console.print("[red]ANTHROPIC_API_KEY not set. Set it and run 'compass discover'.[/red]")
+            else:
+                console.print(f"[red]Error: {e}[/red]")
+        except Exception as e:
+            console.print(f"[red]Discovery failed: {e}[/red]")
+
+    console.print("\n[bold green]Quickstart complete![/bold green]")
+    console.print("\nNext steps:")
+    console.print("  compass reconcile    — find conflicts between sources")
+    console.print("  compass discover     — surface product opportunities")
+    console.print("  compass mcp install  — add Compass to Claude Code")
+    console.print("  compass doctor       — check your setup\n")
+
+
 # --- demo ---
 
 @app.command()

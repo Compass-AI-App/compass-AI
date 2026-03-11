@@ -1,105 +1,134 @@
 # Compass Quickstart
 
-Welcome to the Compass beta! This guide gets you from zero to your first product discovery in under 10 minutes.
+Get from zero to your first product discovery in 5 minutes.
+
+## Prerequisites
+
+- Python 3.11+
+- An Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
 
 ## Install
 
-**Option A: macOS App**
-
-1. Download the latest `.dmg` from [GitHub Releases](https://github.com/Compass-AI-App/compass-AI/releases)
-2. Drag Compass to Applications
-3. Launch — the onboarding wizard will guide you through setup
-
-**Option B: CLI (pip)**
-
 ```bash
-pip install compass-ai
+# Clone and install
+git clone https://github.com/Compass-AI-App/compass-AI.git
+cd compass-AI/engine
+pip install -e .
+
+# Verify
 compass --version
+# → compass 0.1.0
 ```
 
-## Setup
+## Option 1: Interactive Quickstart (recommended)
 
-### 1. Get an API Key
-
-Compass uses Claude to analyze your evidence. You need an Anthropic API key:
-
-1. Go to [console.anthropic.com](https://console.anthropic.com)
-2. Create an API key
-3. Set it in the app's Settings page, or as an environment variable:
-   ```bash
-   export ANTHROPIC_API_KEY="sk-ant-..."
-   ```
-
-### 2. Create a Workspace
-
-**App:** The onboarding wizard handles this automatically.
-
-**CLI:**
 ```bash
-mkdir my-product && cd my-product
+# Set your API key
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Navigate to your product's root directory
+cd /path/to/your/product
+
+# Run the interactive quickstart
+compass quickstart
+```
+
+The quickstart walks you through:
+1. Naming your product
+2. Connecting sources (code repo, docs, metrics, interviews, support tickets)
+3. Ingesting evidence
+4. Running discovery
+
+**Expected output** (with 3+ sources connected):
+```
+✓ Workspace initialized
+✓ code:my-repo: 15 items
+✓ docs:strategy: 3 items
+✓ analytics:metrics: 2 items
+42 evidence items ingested.
+
+Running reconciliation + discovery...
+  Found 4 conflicts
+  Found 5 opportunities
+
+╭─ Fix sync reliability before it becomes existential ─╮
+│ ...                                                   │
+╰───────────────────────────────────────────────────────╯
+```
+
+## Option 2: Step-by-step CLI
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# 1. Initialize workspace
+cd /path/to/your/product
 compass init "My Product" --description "What my product does"
+
+# 2. Connect sources (at least 2 for meaningful conflicts)
+compass connect github --path ./                    # your codebase
+compass connect docs --path ./docs/                 # strategy docs, PRDs
+compass connect analytics --path ./data/metrics.csv # usage data
+compass connect interviews --path ./research/       # user interview notes
+compass connect support --path ./support/tickets.csv # support tickets
+
+# 3. Ingest evidence
+compass ingest
+# → 42 evidence items from 5 sources
+
+# 4. Find conflicts
+compass reconcile
+# → 4 conflicts found (2 high severity)
+
+# 5. Discover opportunities
+compass discover
+# → 5 ranked opportunities
+
+# 6. Generate a spec for the top opportunity
+compass specify "Fix sync reliability"
+# → Agent-ready feature specification
 ```
 
-### 3. Connect Sources
+## Option 3: Try the demo first
 
-Compass analyzes four types of evidence:
-
-| Type | Examples | CLI connector |
-|------|----------|---------------|
-| **Code** | Your repository | `github` |
-| **Docs** | Strategy docs, PRDs, roadmaps | `docs` |
-| **Data** | Analytics CSVs, metrics | `analytics` |
-| **Judgment** | User interviews, support tickets | `interviews`, `support` |
-
-**CLI:**
-```bash
-compass connect github --path /path/to/your/repo
-compass connect docs --path /path/to/strategy-docs/
-compass connect analytics --path /path/to/metrics.csv
-compass connect interviews --path /path/to/interview-notes/
-```
-
-### 4. Run the Pipeline
+Not ready with your own data? See Compass in action:
 
 ```bash
-compass ingest        # Reads all sources into the knowledge graph
-compass reconcile     # Finds conflicts between sources
-compass discover      # Synthesizes ranked product opportunities
-compass specify "..."  # Generates agent-ready spec for an opportunity
-```
-
-Or use the app — click through Workspace → Evidence → Conflicts → Discover.
-
-## Try the Demo First
-
-Not ready to use your own data? Run the built-in demo:
-
-```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
 compass demo
 ```
 
-This runs the full pipeline on sample data showing a realistic product with strategic misalignment.
+Runs the full pipeline on sample data showing a product with strategic misalignment between what leadership says (sync is reliable) and what the data shows (it's not).
 
-## MCP Integration (Power Users)
+## What makes a good setup
 
-Use Compass inside Claude Code or Cursor:
+**Minimum viable:** 1 code repo + 1 strategy doc = you'll get basic code-vs-docs conflicts.
 
-```bash
-compass mcp install
-```
+**Best results:** Sources from all 4 truth types:
 
-Then restart your AI tool. You can now ask "what should we build next?" and Compass tools will be available.
+| Source Type | What to Connect | Why |
+|------------|----------------|-----|
+| Code | Your main repo | Shows what the product *can* do |
+| Docs | Strategy doc, roadmap, PRD | Shows what's *expected* |
+| Data | Metrics CSV, analytics export | Shows what *is* happening |
+| Judgment | Interview notes, support tickets | Shows what users *want* |
+
+The more sources you connect, the higher-confidence Compass's discoveries will be.
+
+## Next steps
+
+- `compass doctor` — diagnose any setup issues
+- `compass mcp install` — use Compass inside Claude Code ([MCP setup guide](./mcp-setup.md))
+- `compass chat` — ask questions grounded in your evidence
 
 ## Troubleshooting
 
-Run the diagnostic tool:
-
 ```bash
+# Check your setup
 compass doctor
+
+# Common issues:
+# - "API key not configured" → export ANTHROPIC_API_KEY="sk-ant-..."
+# - "No sources connected" → compass connect <type> --path <path>
+# - "No evidence ingested" → compass ingest
 ```
-
-This checks your setup and suggests fixes for any issues.
-
-## Feedback
-
-We want to hear from you! Use the feedback button in the app (bottom-right corner), or reach out directly.
