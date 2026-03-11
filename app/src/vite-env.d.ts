@@ -3,8 +3,10 @@
 interface CompassEngine {
   call: (endpoint: string, body?: unknown) => Promise<unknown>;
   health: () => Promise<{ status: string; version: string }>;
+  restart: () => Promise<{ status: string; message?: string }>;
   stream: (endpoint: string, body?: unknown) => Promise<{ status: string }>;
   onStreamData: (callback: (data: string) => void) => () => void;
+  onStatus: (callback: (data: { state: string; message: string }) => void) => () => void;
 }
 
 interface CompassApp {

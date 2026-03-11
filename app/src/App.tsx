@@ -12,6 +12,65 @@ import OnboardingPage, { isOnboardingComplete } from "./pages/OnboardingPage";
 import LoginPage from "./pages/LoginPage";
 import { useSettingsStore } from "./stores/settings";
 
+type EngineState = "starting" | "setup" | "ready" | "error" | "crashed" | null;
+
+function EngineStatusBanner() {
+  const [engineState, setEngineState] = useState<EngineState>(null);
+  const [message, setMessage] = useState("");
+  const [restarting, setRestarting] = useState(false);
+
+  useEffect(() => {
+    const cleanup = window.compass?.engine.onStatus?.((data) => {
+      setEngineState(data.state as EngineState);
+      setMessage(data.message);
+      if (data.state === "ready") {
+        // Auto-dismiss after 2 seconds
+        setTimeout(() => setEngineState(null), 2000);
+      }
+    });
+    return cleanup;
+  }, []);
+
+  async function handleRestart() {
+    setRestarting(true);
+    setEngineState("starting");
+    setMessage("Restarting engine...");
+    try {
+      await window.compass?.engine.restart();
+    } catch {
+      setEngineState("error");
+      setMessage("Failed to restart engine.");
+    } finally {
+      setRestarting(false);
+    }
+  }
+
+  if (!engineState || engineState === "ready") return null;
+
+  const isError = engineState === "crashed" || engineState === "error";
+
+  return (
+    <div
+      className={`fixed top-0 left-0 right-0 z-50 px-4 py-2.5 text-center text-sm font-medium ${
+        isError
+          ? "bg-red-500/90 text-white"
+          : "bg-compass-accent/90 text-white"
+      }`}
+    >
+      <span>{message}</span>
+      {isError && (
+        <button
+          onClick={handleRestart}
+          disabled={restarting}
+          className="ml-3 px-3 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-medium transition-colors disabled:opacity-50"
+        >
+          {restarting ? "Restarting..." : "Restart Engine"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AppWithStartup() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const pushToEngine = useSettingsStore((s) => s.pushToEngine);
@@ -46,6 +105,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <EngineStatusBanner />
         <AppWithStartup />
       </BrowserRouter>
     </ErrorBoundary>
