@@ -104,6 +104,13 @@ class KnowledgeGraph:
         matched_ids = set(results["ids"][0])
         return [e for e in self._store.items if e.id in matched_ids]
 
+    def get_by_id(self, evidence_id: str) -> Evidence | None:
+        """Look up a single evidence item by ID."""
+        for e in self._store.items:
+            if e.id == evidence_id:
+                return e
+        return None
+
     def get_cross_source_evidence(self, query: str, n_per_source: int = 5) -> dict[SourceType, list[Evidence]]:
         """Get related evidence from each source type for a given query."""
         result: dict[SourceType, list[Evidence]] = {}

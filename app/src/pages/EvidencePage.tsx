@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Database, Search } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -23,14 +24,33 @@ const tabColors: Record<string, string> = {
 
 export default function EvidencePage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
-  const { items, loading, error, filter, searchQuery, setFilter, setSearchQuery, fetchEvidence } =
+  const { items, loading, error, filter, searchQuery, highlightId, setFilter, setSearchQuery, setHighlightId, fetchEvidence } =
     useEvidenceStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  // Read ?id= from URL to highlight a specific evidence item
+  useEffect(() => {
+    const idParam = searchParams.get("id");
+    if (idParam) {
+      setHighlightId(idParam);
+      // Clear the URL param after reading
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (workspacePath && items.length === 0) {
       fetchEvidence(workspacePath);
     }
   }, [workspacePath]);
+
+  // Scroll to highlighted item once loaded
+  useEffect(() => {
+    if (highlightId && items.length > 0 && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, items]);
 
   const filtered = items.filter((e) => {
     if (filter && e.source_type !== filter) return false;
@@ -109,7 +129,16 @@ export default function EvidencePage() {
       ) : (
         <div className="space-y-2">
           {filtered.map((e) => (
-            <EvidenceCard key={e.id} evidence={e} />
+            <div
+              key={e.id}
+              ref={e.id === highlightId ? highlightRef : undefined}
+              className={clsx(
+                "rounded-xl transition-shadow",
+                e.id === highlightId && "ring-2 ring-compass-accent"
+              )}
+            >
+              <EvidenceCard evidence={e} defaultExpanded={e.id === highlightId} />
+            </div>
           ))}
         </div>
       )}

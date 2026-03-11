@@ -301,6 +301,35 @@ def get_evidence(req: WorkspaceRequest):
     }
 
 
+class EvidenceByIdRequest(BaseModel):
+    workspace_path: str
+    evidence_id: str
+
+
+@app.post("/evidence/by-id")
+def get_evidence_by_id(req: EvidenceByIdRequest):
+    """Look up a single evidence item by ID with full metadata."""
+    kg = _get_kg(req.workspace_path)
+    item = kg.get_by_id(req.evidence_id)
+    if not item:
+        raise HTTPException(404, f"Evidence item '{req.evidence_id}' not found")
+
+    return {
+        "status": "ok",
+        "item": {
+            "id": item.id,
+            "source_type": item.source_type.value,
+            "connector": item.connector,
+            "title": item.title,
+            "content": item.content,
+            "metadata": item.metadata,
+            "timestamp": str(item.timestamp),
+            "ingested_at": str(item.ingested_at) if item.ingested_at else None,
+            "source_name": item.source_name or "",
+        },
+    }
+
+
 # ---------- Reconcile ----------
 
 @app.post("/reconcile")
