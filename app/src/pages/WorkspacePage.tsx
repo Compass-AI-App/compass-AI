@@ -6,6 +6,7 @@ import { useWorkspaceManager } from "../stores/workspaceManager";
 import SourceConnector from "../components/workspace/SourceConnector";
 import IngestButton from "../components/workspace/IngestButton";
 import WorkspacePicker from "../components/workspace/WorkspacePicker";
+import WeeklyPlanWidget from "../components/workspace/WeeklyPlanWidget";
 
 export default function WorkspacePage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -106,6 +107,12 @@ export default function WorkspacePage() {
             .join(", ")}
         />
       </div>
+
+      {evidenceCount > 0 && workspacePath && (
+        <section className="mb-8">
+          <WeeklyPlanWidget workspacePath={workspacePath} />
+        </section>
+      )}
 
       <section className="mb-8">
         <h2 className="text-lg font-medium text-compass-text mb-3">Connect Sources</h2>
