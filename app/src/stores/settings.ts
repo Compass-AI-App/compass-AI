@@ -22,7 +22,7 @@ const SETTINGS_KEY = "compass-settings";
 const SECRET_KEY_NAME = "anthropic-api-key";
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  provider: "compass",
+  provider: "byok",
   apiKey: "",
   model: "claude-sonnet-4-20250514",
   tokenUsage: { input: 0, output: 0, total: 0, cost: "$0.00" },
@@ -50,7 +50,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       if (raw) {
         const data = JSON.parse(raw);
         set({
-          provider: data.provider || "compass",
+          provider: data.provider || "byok",
           model: data.model || "claude-sonnet-4-20250514",
         });
       }

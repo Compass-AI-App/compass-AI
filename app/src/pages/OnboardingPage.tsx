@@ -8,9 +8,7 @@ import {
   Check,
   Loader2,
   Shield,
-  ChevronDown,
-  ChevronRight,
-  Zap,
+  AlertCircle,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -49,9 +47,11 @@ export default function OnboardingPage() {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-20250514");
-  const [useOwnKey, setUseOwnKey] = useState(false);
   const [connectedSources, setConnectedSources] = useState<string[]>([]);
+  const [pendingSources, setPendingSources] = useState<{ type: string; path: string; name: string }[]>([]);
   const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [workspaceInitialized, setWorkspaceInitialized] = useState(false);
 
   const setWorkspace = useWorkspaceStore((s) => s.setWorkspace);
   const setSettingsApiKey = useSettingsStore((s) => s.setApiKey);
@@ -68,20 +68,17 @@ export default function OnboardingPage() {
   async function handleConnectSource(sourceType: string) {
     if (connectedSources.includes(sourceType) || !workspacePath) return;
     setConnecting(true);
+    setError(null);
     try {
-      const path = await window.compass?.app.selectDirectory();
-      if (path) {
-        await window.compass?.engine.call("/connect", {
-          workspace_path: workspacePath,
-          source_type: sourceType === "analytics" ? "data" : sourceType === "interviews" || sourceType === "support" ? "judgment" : sourceType === "docs" ? "docs" : "code",
-          connector: sourceType,
-          config: { path },
-          name: `${sourceType}:${path.split("/").pop()}`,
-        });
+      const selectedPath = await window.compass?.app.selectDirectory();
+      if (selectedPath) {
+        const name = `${sourceType}:${selectedPath.split("/").pop()}`;
+        setPendingSources((prev) => [...prev, { type: sourceType, path: selectedPath, name }]);
         setConnectedSources((prev) => [...prev, sourceType]);
       }
     } catch (err) {
-      console.error("Connect source failed:", err);
+      console.error("Select directory failed:", err);
+      setError("Failed to select directory. Please try again.");
     } finally {
       setConnecting(false);
     }
@@ -89,8 +86,14 @@ export default function OnboardingPage() {
 
   async function handleFinish() {
     if (!workspacePath) return;
+    setError(null);
 
-    // Init workspace
+    // 1. Save API key and settings first (so engine can use them)
+    setProvider("byok");
+    if (apiKey) setSettingsApiKey(apiKey);
+    setSettingsModel(model);
+
+    // 2. Init workspace
     try {
       await window.compass?.engine.call("/init", {
         workspace_path: workspacePath,
@@ -101,23 +104,30 @@ export default function OnboardingPage() {
       // may already be initialized
     }
 
-    // Save settings and register in workspace manager
+    // 3. Connect all pending sources (workspace is now initialized)
+    for (const source of pendingSources) {
+      try {
+        await window.compass?.engine.call("/connect", {
+          workspace_path: workspacePath,
+          source_type: source.type,
+          name: source.name,
+          path: source.path,
+        });
+      } catch (err) {
+        console.error(`Failed to connect source ${source.name}:`, err);
+      }
+    }
+
+    // 4. Register workspace
     setWorkspace(workspacePath, productName, productDesc);
     await addWorkspaceEntry({
       name: productName,
       description: productDesc,
       path: workspacePath,
     });
-    if (useOwnKey && apiKey) {
-      setProvider("byok");
-      setSettingsApiKey(apiKey);
-    } else {
-      setProvider("compass");
-    }
-    setSettingsModel(model);
 
-    // Auto-trigger ingestion in background (non-blocking)
-    if (connectedSources.length > 0) {
+    // 5. Auto-trigger ingestion in background (non-blocking)
+    if (pendingSources.length > 0) {
       useWorkspaceStore.getState().triggerIngestion(workspacePath);
     }
 
@@ -242,78 +252,57 @@ export default function OnboardingPage() {
         {step === 3 && (
           <div>
             <div className="flex items-center gap-3 mb-6">
-              <Zap className="w-6 h-6 text-compass-accent" />
+              <Key className="w-6 h-6 text-compass-accent" />
               <h2 className="text-xl font-semibold text-compass-text">
                 AI Setup
               </h2>
             </div>
 
-            {/* Default: Compass-provided */}
-            <div className="rounded-lg border border-compass-accent/30 bg-compass-accent/5 p-4 mb-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Compass className="w-4 h-4 text-compass-accent" />
-                <p className="text-sm font-medium text-compass-text">
-                  Powered by Claude
+            <p className="text-sm text-neutral-400 mb-4">
+              Compass uses Claude to analyze your product evidence. Enter your Anthropic API key to get started.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-neutral-400 mb-1">
+                  Anthropic API Key
+                </label>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-ant-..."
+                  className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Get one at{" "}
+                  <span className="text-compass-accent">console.anthropic.com</span>
                 </p>
               </div>
-              <p className="text-xs text-neutral-400">
-                Compass includes AI out of the box. No setup needed — just start using it.
-              </p>
-            </div>
 
-            {/* Model selector */}
-            <div className="mb-4">
-              <label className="block text-sm text-neutral-400 mb-1">
-                Model
-              </label>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm focus:outline-none focus:border-compass-accent"
-              >
-                <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommended)</option>
-                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (faster)</option>
-                <option value="claude-opus-4-6">Claude Opus 4.6 (most capable)</option>
-              </select>
-            </div>
-
-            {/* Optional: BYOK */}
-            <button
-              onClick={() => setUseOwnKey(!useOwnKey)}
-              className="flex items-center gap-2 text-sm text-compass-muted hover:text-compass-text transition-colors mb-3"
-            >
-              {useOwnKey ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-              Use your own Anthropic API key
-            </button>
-
-            {useOwnKey && (
-              <div className="space-y-3 pl-6 border-l-2 border-compass-border">
-                <div>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-ant-..."
-                    className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:border-compass-accent font-mono"
-                  />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Get one at{" "}
-                    <span className="text-compass-accent">console.anthropic.com</span>
-                  </p>
-                </div>
-                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
-                  <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                  <p className="text-xs text-neutral-400">
-                    Your key is encrypted with your OS keychain and stored locally.
-                    Sent directly to the Anthropic API — never to Compass servers.
-                  </p>
-                </div>
+              <div>
+                <label className="block text-sm text-neutral-400 mb-1">
+                  Model
+                </label>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm focus:outline-none focus:border-compass-accent"
+                >
+                  <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommended)</option>
+                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (faster)</option>
+                  <option value="claude-opus-4-6">Claude Opus 4.6 (most capable)</option>
+                </select>
               </div>
-            )}
+
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-compass-card/50 border border-compass-border/50">
+                <Shield className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-neutral-400">
+                  Your key is encrypted with your OS keychain and stored locally.
+                  Sent directly to the Anthropic API — never to Compass servers.
+                </p>
+              </div>
+            </div>
 
             <div className="flex justify-between mt-8">
               <button
@@ -324,10 +313,10 @@ export default function OnboardingPage() {
               </button>
               <button
                 onClick={() => setStep(4)}
-                disabled={useOwnKey && !apiKey}
+                disabled={!apiKey}
                 className={clsx(
                   "inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors",
-                  !(useOwnKey && !apiKey)
+                  apiKey
                     ? "bg-compass-accent hover:bg-compass-accent-hover text-white"
                     : "bg-compass-card text-neutral-600 cursor-not-allowed"
                 )}
@@ -351,6 +340,12 @@ export default function OnboardingPage() {
             <p className="text-sm text-neutral-400 mb-4">
               Connect at least one source of truth. You can add more later.
             </p>
+            {error && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 mb-4">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <p className="text-xs text-red-400">{error}</p>
+              </div>
+            )}
             <div className="space-y-2">
               {SOURCE_TYPES.map((src) => {
                 const connected = connectedSources.includes(src.type);

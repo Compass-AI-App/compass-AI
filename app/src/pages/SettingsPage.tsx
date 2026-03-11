@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Settings, Key, Cpu, BarChart3, RotateCcw, Shield } from "lucide-react";
 import { clsx } from "clsx";
-import { useSettingsStore, type LLMProvider } from "../stores/settings";
+import { useSettingsStore } from "../stores/settings";
 import { resetOnboarding } from "./OnboardingPage";
 
 const MODELS = [
@@ -11,7 +11,7 @@ const MODELS = [
 ];
 
 export default function SettingsPage() {
-  const { provider, apiKey, model, tokenUsage, setProvider, setApiKey, setModel, fetchUsage, loadSettings } =
+  const { apiKey, model, tokenUsage, setApiKey, setModel, fetchUsage, loadSettings } =
     useSettingsStore();
 
   useEffect(() => {
@@ -41,42 +41,22 @@ export default function SettingsPage() {
         </button>
       </Section>
 
-      {/* LLM Provider */}
-      <Section icon={Cpu} title="LLM Provider">
-        <div className="flex gap-3">
-          <ProviderButton
-            label="Compass"
-            description="AI included — no setup needed"
-            active={provider === "compass"}
-            onClick={() => setProvider("compass")}
-          />
-          <ProviderButton
-            label="Your API Key"
-            description="Bring your own Anthropic key"
-            active={provider === "byok"}
-            onClick={() => setProvider("byok")}
-          />
+      {/* API Key */}
+      <Section icon={Key} title="Anthropic API Key">
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="sk-ant-..."
+          className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-sm text-compass-text placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-compass-accent font-mono"
+        />
+        <div className="flex items-start gap-2 mt-2">
+          <Shield className="w-3.5 h-3.5 text-green-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-neutral-400">
+            Encrypted with your OS keychain. Sent directly to Anthropic — never to Compass servers.
+          </p>
         </div>
       </Section>
-
-      {/* API Key (BYOK only) */}
-      {provider === "byok" && (
-        <Section icon={Key} title="API Key">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-ant-..."
-            className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-sm text-compass-text placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-compass-accent font-mono"
-          />
-          <div className="flex items-start gap-2 mt-2">
-            <Shield className="w-3.5 h-3.5 text-green-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-neutral-400">
-              Encrypted with your OS keychain. Sent directly to Anthropic — never to Compass servers.
-            </p>
-          </div>
-        </Section>
-      )}
 
       {/* Reset onboarding */}
       <Section icon={RotateCcw} title="Onboarding">
@@ -150,31 +130,3 @@ function UsageStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProviderButton({
-  label,
-  description,
-  active,
-  onClick,
-}: {
-  label: string;
-  description: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        "flex-1 px-4 py-3 rounded-lg border text-left transition-colors",
-        active
-          ? "border-compass-accent/50 bg-compass-accent/5"
-          : "border-compass-border bg-compass-card hover:border-compass-accent/20"
-      )}
-    >
-      <p className={clsx("text-sm font-medium", active ? "text-compass-text" : "text-compass-muted")}>
-        {label}
-      </p>
-      <p className="text-xs text-compass-muted mt-0.5">{description}</p>
-    </button>
-  );
-}
