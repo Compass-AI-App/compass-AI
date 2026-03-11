@@ -3,16 +3,20 @@
  *
  * On app startup: finds Python, picks a free port, spawns the FastAPI server,
  * polls /health until ready. On quit: kills the child process.
+ *
+ * For packaged builds: bootstraps a managed venv on first launch.
+ * Handles engine crashes with restart capability.
  */
 
-import { app } from "electron";
-import { ChildProcess, spawn } from "child_process";
-import { existsSync } from "fs";
+import { app, BrowserWindow } from "electron";
+import { ChildProcess, spawn, execSync } from "child_process";
+import { existsSync, mkdirSync } from "fs";
 import path from "path";
 import net from "net";
 
 let engineProcess: ChildProcess | null = null;
 let enginePort: number = 0;
+let intentionalStop = false;
 
 const isPackaged = app.isPackaged;
 
@@ -25,6 +29,63 @@ function getEngineDir(): string {
     return path.join(process.resourcesPath, "engine");
   }
   return path.resolve(__dirname, "../../engine");
+}
+
+/** Managed venv location for packaged builds. */
+function getManagedVenvDir(): string {
+  return path.join(app.getPath("userData"), "engine-venv");
+}
+
+/**
+ * For packaged builds: ensure a managed venv exists with compass-ai installed.
+ * Returns the Python path inside the managed venv.
+ */
+function ensureManagedVenv(): string {
+  const venvDir = getManagedVenvDir();
+  const isWin = process.platform === "win32";
+  const venvPython = isWin
+    ? path.join(venvDir, "Scripts", "python.exe")
+    : path.join(venvDir, "bin", "python3");
+
+  if (existsSync(venvPython)) {
+    return venvPython;
+  }
+
+  console.log("[engine-bridge] First launch: creating managed venv...");
+  notifyRenderer("engine-status", { state: "setup", message: "Setting up Python environment..." });
+
+  // Find system Python
+  const systemPython = findSystemPython();
+  console.log(`[engine-bridge] Using system Python: ${systemPython}`);
+
+  mkdirSync(venvDir, { recursive: true });
+  execSync(`"${systemPython}" -m venv "${venvDir}"`, { stdio: "inherit" });
+
+  // Install compass-ai from the bundled engine source
+  const engineDir = getEngineDir();
+  console.log("[engine-bridge] Installing compass-ai into managed venv...");
+  notifyRenderer("engine-status", { state: "setup", message: "Installing dependencies..." });
+  execSync(`"${venvPython}" -m pip install --quiet "${engineDir}"`, {
+    stdio: "inherit",
+    timeout: 120_000,
+  });
+
+  console.log("[engine-bridge] Managed venv ready");
+  return venvPython;
+}
+
+function findSystemPython(): string {
+  const isWin = process.platform === "win32";
+  const candidates = isWin ? ["python", "python3"] : ["python3", "python"];
+  for (const cmd of candidates) {
+    try {
+      execSync(`${cmd} --version`, { stdio: "ignore" });
+      return cmd;
+    } catch {
+      // not found
+    }
+  }
+  throw new Error("Python 3 not found. Please install Python 3.11+ from python.org");
 }
 
 function findPython(): string {
@@ -45,12 +106,13 @@ function findPython(): string {
     }
   }
 
-  // Packaged app or fallback: use system Python
-  const candidates = isWin ? ["python", "python3"] : ["python3", "python"];
-  for (const c of candidates) {
-    return c; // rely on PATH
+  // Packaged app: use managed venv (bootstrap if needed)
+  if (isPackaged) {
+    return ensureManagedVenv();
   }
-  return isWin ? "python" : "python3";
+
+  // Dev fallback: use system Python
+  return findSystemPython();
 }
 
 function findFreePort(): Promise<number> {
@@ -69,7 +131,7 @@ function findFreePort(): Promise<number> {
   });
 }
 
-async function pollHealth(port: number, timeoutMs = 15000): Promise<boolean> {
+async function pollHealth(port: number, timeoutMs = 30_000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -79,13 +141,29 @@ async function pollHealth(port: number, timeoutMs = 15000): Promise<boolean> {
     } catch {
       // not ready yet
     }
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 300));
   }
   return false;
 }
 
+/** Send status updates to the renderer process. */
+function notifyRenderer(channel: string, data: unknown): void {
+  const windows = BrowserWindow.getAllWindows();
+  for (const win of windows) {
+    try {
+      win.webContents.send(channel, data);
+    } catch {
+      // Window might be closed
+    }
+  }
+}
+
 export async function startEngine(): Promise<number> {
   if (engineProcess && enginePort) return enginePort;
+
+  intentionalStop = false;
+
+  notifyRenderer("engine-status", { state: "starting", message: "Starting engine..." });
 
   const python = findPython();
   enginePort = await findFreePort();
@@ -114,13 +192,26 @@ export async function startEngine(): Promise<number> {
     console.log(`[engine-bridge] Engine exited with code ${code}`);
     engineProcess = null;
     enginePort = 0;
+
+    if (!intentionalStop) {
+      console.error("[engine-bridge] Engine crashed unexpectedly");
+      notifyRenderer("engine-status", {
+        state: "crashed",
+        message: `Engine stopped unexpectedly (exit code ${code}). Click to restart.`,
+      });
+    }
   });
 
   const ready = await pollHealth(enginePort);
   if (!ready) {
     console.error("[engine-bridge] Engine failed to start within timeout");
+    notifyRenderer("engine-status", {
+      state: "error",
+      message: "Engine failed to start. Check that Python 3.11+ is installed.",
+    });
   } else {
     console.log(`[engine-bridge] Engine ready on port ${enginePort}`);
+    notifyRenderer("engine-status", { state: "ready", message: "Engine ready" });
   }
 
   // Store port so IPC handlers can use it
@@ -130,6 +221,7 @@ export async function startEngine(): Promise<number> {
 }
 
 export function stopEngine(): void {
+  intentionalStop = true;
   if (engineProcess) {
     console.log("[engine-bridge] Stopping engine");
     engineProcess.kill("SIGTERM");

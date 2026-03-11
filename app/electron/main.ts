@@ -160,6 +160,17 @@ ipcMain.handle("engine-health", async () => {
   }
 });
 
+// IPC: Restart engine after crash
+ipcMain.handle("engine-restart", async () => {
+  try {
+    stopEngine();
+    await startEngine();
+    return { status: "ok" };
+  } catch (err) {
+    return { status: "error", message: String(err) };
+  }
+});
+
 // IPC: Secure secret storage via OS keychain (Electron safeStorage)
 // Secrets are encrypted with the OS keychain and stored in a local file.
 // They never leave the machine and are not readable without OS-level auth.

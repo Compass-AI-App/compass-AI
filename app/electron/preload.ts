@@ -5,12 +5,18 @@ contextBridge.exposeInMainWorld("compass", {
     call: (endpoint: string, body?: unknown) =>
       ipcRenderer.invoke("engine-call", endpoint, body),
     health: () => ipcRenderer.invoke("engine-health"),
+    restart: () => ipcRenderer.invoke("engine-restart"),
     stream: (endpoint: string, body?: unknown) =>
       ipcRenderer.invoke("engine-stream", endpoint, body),
     onStreamData: (callback: (data: string) => void) => {
       const handler = (_event: unknown, data: string) => callback(data);
       ipcRenderer.on("engine-stream-data", handler);
       return () => ipcRenderer.removeListener("engine-stream-data", handler);
+    },
+    onStatus: (callback: (data: { state: string; message: string }) => void) => {
+      const handler = (_event: unknown, data: { state: string; message: string }) => callback(data);
+      ipcRenderer.on("engine-status", handler);
+      return () => ipcRenderer.removeListener("engine-status", handler);
     },
   },
   app: {
