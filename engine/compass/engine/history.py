@@ -17,6 +17,8 @@ from compass.models.specs import Opportunity
 
 
 HISTORY_FILE = "discovery_history.json"
+FEEDBACK_FILE = "feedback.json"
+QUALITY_LOG_FILE = "quality_log.json"
 
 
 def _load_history(compass_dir: Path) -> list[dict]:
@@ -145,3 +147,90 @@ def get_history_summary(compass_dir: Path) -> dict:
         "total_unique_opportunities": len(opp_counts),
         "total_unique_conflicts": len(conflict_counts),
     }
+
+
+# ---------------------------------------------------------------------------
+# Feedback / Quality tracking
+# ---------------------------------------------------------------------------
+
+def _load_feedback(compass_dir: Path) -> list[dict]:
+    """Load all feedback entries."""
+    path = compass_dir / FEEDBACK_FILE
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_feedback(compass_dir: Path, entries: list[dict]) -> None:
+    path = compass_dir / FEEDBACK_FILE
+    path.write_text(json.dumps(entries, indent=2, default=str))
+
+
+def record_feedback(
+    compass_dir: Path,
+    opportunity_title: str,
+    rating: str,
+) -> dict:
+    """Record feedback on an opportunity.
+
+    Args:
+        opportunity_title: Title of the opportunity
+        rating: "known" (already knew), "surprise" (new insight), "wrong" (incorrect)
+    """
+    entries = _load_feedback(compass_dir)
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "opportunity_title": opportunity_title,
+        "rating": rating,
+    }
+    entries.append(entry)
+    _save_feedback(compass_dir, entries)
+
+    # Also update quality log
+    _update_quality_log(compass_dir)
+
+    return entry
+
+
+def _update_quality_log(compass_dir: Path) -> None:
+    """Recalculate quality stats from all feedback."""
+    feedback = _load_feedback(compass_dir)
+    if not feedback:
+        return
+
+    total = len(feedback)
+    surprises = sum(1 for f in feedback if f.get("rating") == "surprise")
+    known = sum(1 for f in feedback if f.get("rating") == "known")
+    wrong = sum(1 for f in feedback if f.get("rating") == "wrong")
+
+    quality_data = {
+        "last_updated": datetime.now().isoformat(),
+        "total_ratings": total,
+        "surprises": surprises,
+        "known": known,
+        "wrong": wrong,
+        "surprise_rate": round(surprises / total * 100, 1) if total else 0,
+        "accuracy_rate": round((total - wrong) / total * 100, 1) if total else 0,
+    }
+
+    path = compass_dir / QUALITY_LOG_FILE
+    path.write_text(json.dumps(quality_data, indent=2))
+
+
+def get_quality_stats(compass_dir: Path) -> dict:
+    """Get aggregate quality stats."""
+    path = compass_dir / QUALITY_LOG_FILE
+    if not path.exists():
+        # Calculate from feedback directly
+        feedback = _load_feedback(compass_dir)
+        if not feedback:
+            return {"total_ratings": 0, "message": "No feedback recorded yet."}
+        _update_quality_log(compass_dir)
+
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"total_ratings": 0, "message": "Error reading quality log."}
