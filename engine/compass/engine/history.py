@@ -151,6 +151,70 @@ def get_history_summary(compass_dir: Path) -> dict:
     }
 
 
+def compare_with_previous(compass_dir: Path, current_opportunities: list[dict]) -> list[dict]:
+    """Compare current opportunities with previous runs to tag each as NEW, PERSISTENT, or RESOLVED.
+
+    Args:
+        current_opportunities: List of dicts with at least a "title" key.
+
+    Returns:
+        List of dicts with added "status" and "persistence_count" fields.
+        Also returns a list of resolved opportunities (appeared before, gone now).
+    """
+    entries = _load_history(compass_dir)
+    discovery_runs = [e for e in entries if e.get("type") == "discovery"]
+
+    # Count how many times each opportunity appeared historically
+    opp_history: dict[str, int] = {}
+    for entry in discovery_runs:
+        for opp in entry.get("opportunities", []):
+            title = opp.get("title", "")
+            opp_history[title.lower()] = opp_history.get(title.lower(), 0) + 1
+
+    # Tag current opportunities
+    tagged = []
+    for opp in current_opportunities:
+        title_lower = opp.get("title", "").lower()
+        count = opp_history.get(title_lower, 0)
+        if count == 0:
+            status = "NEW"
+        elif count >= 3:
+            status = f"PERSISTENT x{count}"
+        else:
+            status = f"SEEN x{count}"
+        tagged.append({**opp, "status": status, "persistence_count": count})
+
+    return tagged
+
+
+def get_resolved_opportunities(compass_dir: Path, current_titles: list[str]) -> list[dict]:
+    """Find opportunities that appeared in previous runs but not in the current one."""
+    entries = _load_history(compass_dir)
+    discovery_runs = [e for e in entries if e.get("type") == "discovery"]
+
+    if not discovery_runs:
+        return []
+
+    # Get all previously seen opportunities
+    all_previous: dict[str, dict] = {}
+    for entry in discovery_runs:
+        for opp in entry.get("opportunities", []):
+            title = opp.get("title", "")
+            all_previous[title.lower()] = {
+                "title": title,
+                "last_seen": entry.get("timestamp", ""),
+                "confidence": opp.get("confidence", ""),
+            }
+
+    current_lower = {t.lower() for t in current_titles}
+    resolved = []
+    for title_lower, info in all_previous.items():
+        if title_lower not in current_lower:
+            resolved.append({**info, "status": "RESOLVED"})
+
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Feedback / Quality tracking
 # ---------------------------------------------------------------------------

@@ -400,6 +400,23 @@ def discover(req: WorkspaceRequest):
     return {"status": "ok", "count": len(result), "opportunities": result}
 
 
+# ---------- History ----------
+
+@app.post("/history")
+def get_discovery_history(req: WorkspaceRequest):
+    base = Path(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    from compass.engine.history import get_history_summary, get_history
+    summary = get_history_summary(compass_dir)
+    entries = get_history(compass_dir)
+
+    # Only return the last 20 discovery entries
+    discovery_runs = [e for e in entries if e.get("type") == "discovery"][-20:]
+
+    return {"status": "ok", "summary": summary, "runs": discovery_runs}
+
+
 # ---------- Feedback ----------
 
 class FeedbackRequest(BaseModel):

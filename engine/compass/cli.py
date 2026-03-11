@@ -256,20 +256,40 @@ def discover(
         console.print("[yellow]No clear opportunities found. Try adding more evidence sources.[/yellow]")
         return
 
+    # Compare with previous runs for cross-run tracking
+    from compass.engine.history import compare_with_previous, get_resolved_opportunities
+    current_dicts = [{"title": o.title, "rank": o.rank, "confidence": o.confidence.value} for o in opportunities]
+    tagged = compare_with_previous(compass_dir, current_dicts)
+    resolved = get_resolved_opportunities(compass_dir, [o.title for o in opportunities])
+
     console.print(f"\n[bold]Top {len(opportunities)} Opportunities[/bold]")
     console.print("[dim]Ranked by confidence and impact, grounded in evidence.[/dim]\n")
 
-    for opp in opportunities:
+    for i, opp in enumerate(opportunities):
         confidence_color = {"high": "green", "medium": "yellow", "low": "dim"}
         color = confidence_color.get(opp.confidence.value, "white")
         confidence_badge = f"[{color}]{opp.confidence.value.upper()}[/{color}]"
+
+        status = tagged[i].get("status", "") if i < len(tagged) else ""
+        status_badge = ""
+        if status == "NEW":
+            status_badge = " [cyan][NEW][/cyan]"
+        elif status.startswith("PERSISTENT"):
+            status_badge = f" [yellow][{status}][/yellow]"
+        elif status.startswith("SEEN"):
+            status_badge = f" [dim][{status}][/dim]"
 
         console.print(Panel(
             f"[bold]{opp.description}[/bold]\n\n"
             f"[dim]Evidence:[/dim] {opp.evidence_summary}\n\n"
             f"[dim]Impact:[/dim] {opp.estimated_impact}",
-            title=f"#{opp.rank} {confidence_badge}  {opp.title}",
+            title=f"#{opp.rank} {confidence_badge}  {opp.title}{status_badge}",
         ))
+
+    if resolved:
+        console.print(f"\n[green]Resolved ({len(resolved)}):[/green]")
+        for r in resolved:
+            console.print(f"  [green]✓[/green] {r['title']} — no longer detected")
 
     # Save opportunities
     output_dir = get_output_dir()
