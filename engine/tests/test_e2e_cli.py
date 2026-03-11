@@ -154,10 +154,13 @@ MOCK_DISCOVER_RESPONSE = {
 
 def _mock_ask_json(prompt, system="", model="", max_tokens=4096):
     """Return mock responses based on which engine is calling."""
-    if "conflicts" in system.lower() or "reconcil" in system.lower():
-        return MOCK_RECONCILE_RESPONSE
-    if "opportunit" in system.lower() or "discover" in system.lower():
+    system_lower = system.lower()
+    # Check for discoverer first — its system prompt is about synthesizing opportunities
+    if "synthesize" in system_lower or "product opportunities" in system_lower:
         return MOCK_DISCOVER_RESPONSE
+    # Reconciler — its system prompt is about finding conflicts between sources
+    if "reconcil" in system_lower or "finds meaningful\nconflicts" in system_lower:
+        return MOCK_RECONCILE_RESPONSE
     return {"conflicts": [], "opportunities": []}
 
 
@@ -236,7 +239,7 @@ class TestE2EPipeline:
         source_types = {item["source_type"] for item in data["items"]}
         assert len(source_types) >= 3  # at least code, docs, and one judgment source
 
-    @patch("compass.engine.llm.ask_json", side_effect=_mock_ask_json)
+    @patch("compass.engine.reconciler.ask_json", side_effect=_mock_ask_json)
     def test_reconcile(self, mock_llm, client, demo_workspace):
         """Pipeline stage 4: reconcile with mocked LLM."""
         self._setup_workspace(client, demo_workspace)
@@ -255,8 +258,9 @@ class TestE2EPipeline:
         assert "Conflict Report" in report_text
         assert "Sync reliability" in report_text
 
-    @patch("compass.engine.llm.ask_json", side_effect=_mock_ask_json)
-    def test_discover(self, mock_llm, client, demo_workspace):
+    @patch("compass.engine.discoverer.ask_json", side_effect=_mock_ask_json)
+    @patch("compass.engine.reconciler.ask_json", side_effect=_mock_ask_json)
+    def test_discover(self, mock_reconcile, mock_discover, client, demo_workspace):
         """Pipeline stage 5: discover with mocked LLM."""
         self._setup_workspace(client, demo_workspace)
         client.post("/ingest", json={"workspace_path": str(demo_workspace)})
@@ -275,8 +279,9 @@ class TestE2EPipeline:
         assert cache[0]["title"]  # has a title
         assert cache[0]["confidence"] in ("high", "medium", "low")
 
-    @patch("compass.engine.llm.ask_json", side_effect=_mock_ask_json)
-    def test_full_pipeline(self, mock_llm, client, demo_workspace):
+    @patch("compass.engine.discoverer.ask_json", side_effect=_mock_ask_json)
+    @patch("compass.engine.reconciler.ask_json", side_effect=_mock_ask_json)
+    def test_full_pipeline(self, mock_reconcile, mock_discover, client, demo_workspace):
         """Full pipeline: init → connect → ingest → reconcile → discover.
 
         Asserts all persistence artifacts exist at the end.
