@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Database, FileCode2, FileText, Loader2, ThumbsUp, Star, ThumbsDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Database, FileCode2, FileText, Loader2, ShieldAlert, ThumbsUp, Star, ThumbsDown } from "lucide-react";
 import { clsx } from "clsx";
 import type { Opportunity, Confidence } from "../../types/engine";
 import { useWorkspaceStore } from "../../stores/workspace";
@@ -15,13 +15,15 @@ interface Props {
   opportunity: Opportunity;
   onGenerateSpec: (title: string) => void;
   onGenerateBrief: (title: string) => void;
+  onChallenge: (title: string) => void;
   specLoading: boolean;
   briefLoading: boolean;
+  challengeLoading: boolean;
 }
 
 type Rating = "known" | "surprise" | "wrong" | null;
 
-export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerateBrief, specLoading, briefLoading }: Props) {
+export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerateBrief, onChallenge, specLoading, briefLoading, challengeLoading }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [rating, setRating] = useState<Rating>(null);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -135,6 +137,21 @@ export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerat
                   <FileText className="w-4 h-4" />
                 )}
                 Write Brief
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChallenge(opportunity.title);
+                }}
+                disabled={challengeLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 text-red-400/70 hover:text-red-400 hover:border-red-500/50 text-sm font-medium transition-colors"
+              >
+                {challengeLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4" />
+                )}
+                Challenge
               </button>
             </div>
             <div className="flex items-center gap-1">

@@ -491,6 +491,56 @@ def compass_connect(source_type: str, path: str, name: str = "") -> str:
 
 
 @mcp.tool()
+def compass_challenge(opportunity_title: str) -> str:
+    """Challenge a product opportunity — structured devil's advocate analysis.
+
+    Finds contradicting evidence, identifies unsupported assumptions, surfaces risks,
+    and scores evidence quality. Returns a structured challenge report.
+
+    Args:
+        opportunity_title: Title of the opportunity to challenge (from compass_discover output)
+    """
+    try:
+        workspace = _get_workspace()
+    except FileNotFoundError:
+        return "No Compass workspace found. Run `compass init` first, or set COMPASS_WORKSPACE."
+    kg = _get_kg(workspace)
+    if len(kg) == 0:
+        return "No evidence ingested. Run `compass ingest` first."
+
+    config = _get_config(workspace)
+    from compass.engine.challenger import Challenger
+    import json
+
+    from compass.config import get_compass_dir
+    compass_dir = get_compass_dir(workspace)
+
+    # Try to find cached opportunity
+    cache_path = compass_dir / "opportunities_cache.json"
+    description = ""
+    evidence_summary = ""
+    if cache_path.exists():
+        try:
+            cache = json.loads(cache_path.read_text())
+            for opp_data in cache:
+                if opportunity_title.lower() in opp_data.get("title", "").lower():
+                    description = opp_data.get("description", "")
+                    evidence_summary = opp_data.get("evidence_summary", "")
+                    break
+        except Exception:
+            pass
+
+    challenger = Challenger(kg, model=config.model)
+    result = challenger.challenge(
+        opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+        compass_dir=compass_dir,
+    )
+    return result.to_markdown()
+
+
+@mcp.tool()
 def compass_write_brief(opportunity_title: str) -> str:
     """Generate an evidence-grounded product brief for an opportunity.
 

@@ -1037,6 +1037,73 @@ def report(
             console.print(content)
 
 
+# --- challenge ---
+
+@app.command()
+def challenge(
+    opportunity_title: str = typer.Argument(..., help="Title of the opportunity to challenge"),
+    output: str = typer.Option("", "--output", "-o", help="Write challenge to file"),
+    format: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown or json"),
+):
+    """Challenge an opportunity — structured devil's advocate analysis."""
+    config = load_config()
+    compass_dir = get_compass_dir()
+
+    from compass.engine.challenger import Challenger
+
+    kg = _load_knowledge_graph(compass_dir)
+    if not kg:
+        return
+
+    # Try to find cached opportunity for richer context
+    cache_path = compass_dir / "opportunities_cache.json"
+    description = ""
+    evidence_summary = ""
+
+    if cache_path.exists():
+        try:
+            cache = json.loads(cache_path.read_text())
+            for opp_data in cache:
+                if opportunity_title.lower() in opp_data.get("title", "").lower():
+                    description = opp_data.get("description", "")
+                    evidence_summary = opp_data.get("evidence_summary", "")
+                    break
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    challenger = Challenger(kg, model=config.model)
+    result = challenger.challenge(
+        opportunity_title,
+        description=description,
+        evidence_summary=evidence_summary,
+        compass_dir=compass_dir,
+    )
+
+    if format == "json":
+        content = json.dumps(result.model_dump(), indent=2)
+    else:
+        content = result.to_markdown()
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(content)
+        console.print(f"[green]Challenge written to {out_path}[/green]")
+    else:
+        if format == "markdown":
+            console.print(Markdown(content))
+        else:
+            console.print(content)
+
+    # Show evidence quality score prominently
+    score = result.evidence_quality_score
+    if score >= 7:
+        console.print(f"\n[green]Evidence Quality: {score:.1f}/10 — Well-supported[/green]")
+    elif score >= 4:
+        console.print(f"\n[yellow]Evidence Quality: {score:.1f}/10 — Partially supported[/yellow]")
+    else:
+        console.print(f"\n[red]Evidence Quality: {score:.1f}/10 — Weakly supported[/red]")
+
+
 # --- write-brief ---
 
 @app.command("write-brief")
