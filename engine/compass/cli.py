@@ -1131,10 +1131,20 @@ def install():
     import json
 
     compass_path = _find_compass_executable()
-    server_config = {
+
+    # Include COMPASS_WORKSPACE if a workspace exists in cwd
+    env = {}
+    cwd = Path.cwd()
+    if (cwd / ".compass").is_dir():
+        env["COMPASS_WORKSPACE"] = str(cwd)
+        console.print(f"[dim]Setting workspace to: {cwd}[/dim]")
+
+    server_config: dict = {
         "command": compass_path,
         "args": ["mcp", "serve"],
     }
+    if env:
+        server_config["env"] = env
 
     installed = False
 
