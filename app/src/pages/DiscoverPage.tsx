@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Clock, Download, Lightbulb, Loader2, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Download, FileText, Lightbulb, Loader2, Sparkles } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useOpportunitiesStore } from "../stores/opportunities";
 import OpportunityCard from "../components/discover/OpportunityCard";
 import SpecView from "../components/discover/SpecView";
+import DocumentView from "../components/discover/DocumentView";
 
 export default function DiscoverPage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -15,9 +16,13 @@ export default function DiscoverPage() {
     activeSpec,
     specLoading,
     specError,
+    activeBrief,
+    briefLoading,
     runDiscover,
     generateSpec,
+    generateBrief,
     setActiveSpec,
+    setActiveBrief,
   } = useOpportunitiesStore();
 
   const [exporting, setExporting] = useState(false);
@@ -35,8 +40,33 @@ export default function DiscoverPage() {
     }
   }, [workspacePath, opportunities]);
 
+  const [updatingStakeholder, setUpdatingStakeholder] = useState(false);
+  const [activeUpdate, setActiveUpdate] = useState<{ title: string; markdown: string } | null>(null);
+
   function handleGenerateSpec(title: string) {
     if (workspacePath) generateSpec(workspacePath, title);
+  }
+
+  function handleGenerateBrief(title: string) {
+    if (workspacePath) generateBrief(workspacePath, title);
+  }
+
+  async function handleWriteUpdate() {
+    if (!workspacePath) return;
+    setUpdatingStakeholder(true);
+    try {
+      const res = (await window.compass?.engine.call("/write/update", {
+        workspace_path: workspacePath,
+        days: 7,
+      })) as { status: string; markdown: string } | undefined;
+      if (res?.status === "ok") {
+        setActiveUpdate({ title: "Stakeholder Update", markdown: res.markdown });
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setUpdatingStakeholder(false);
+    }
   }
 
   async function handleExportReport() {
@@ -97,18 +127,32 @@ export default function DiscoverPage() {
           {loading ? "Discovering..." : opportunities.length > 0 ? "Re-discover" : "Discover"}
         </button>
         {opportunities.length > 0 && (
-          <button
-            onClick={handleExportReport}
-            disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-compass-border text-compass-muted hover:text-compass-text hover:border-compass-text/30 transition-colors"
-          >
-            {exporting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
-            Export Report
-          </button>
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={handleWriteUpdate}
+              disabled={updatingStakeholder}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-compass-border text-compass-muted hover:text-compass-text hover:border-compass-text/30 transition-colors"
+            >
+              {updatingStakeholder ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+              Write Update
+            </button>
+            <button
+              onClick={handleExportReport}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-compass-border text-compass-muted hover:text-compass-text hover:border-compass-text/30 transition-colors"
+            >
+              {exporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Export Report
+            </button>
+          </div>
         )}
       </div>
 
@@ -148,7 +192,9 @@ export default function DiscoverPage() {
               key={opp.rank}
               opportunity={opp}
               onGenerateSpec={handleGenerateSpec}
+              onGenerateBrief={handleGenerateBrief}
               specLoading={specLoading}
+              briefLoading={briefLoading}
             />
           ))}
         </div>
@@ -213,6 +259,24 @@ export default function DiscoverPage() {
           cursorMarkdown={activeSpec.cursorMarkdown}
           claudeCodeMarkdown={activeSpec.claudeCodeMarkdown}
           onClose={() => setActiveSpec(null)}
+        />
+      )}
+
+      {/* Brief slide-over */}
+      {activeBrief && (
+        <DocumentView
+          title={activeBrief.title}
+          markdown={activeBrief.markdown}
+          onClose={() => setActiveBrief(null)}
+        />
+      )}
+
+      {/* Update slide-over */}
+      {activeUpdate && (
+        <DocumentView
+          title={activeUpdate.title}
+          markdown={activeUpdate.markdown}
+          onClose={() => setActiveUpdate(null)}
         />
       )}
     </div>

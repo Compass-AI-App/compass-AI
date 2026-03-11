@@ -8,13 +8,17 @@ interface OpportunitiesState {
   activeSpec: { title: string; markdown: string; cursorMarkdown: string; claudeCodeMarkdown: string; spec: FeatureSpec } | null;
   specLoading: boolean;
   specError: string | null;
+  activeBrief: { title: string; markdown: string } | null;
+  briefLoading: boolean;
 
   setOpportunities: (o: Opportunity[]) => void;
   setLoading: (v: boolean) => void;
   setActiveSpec: (s: { title: string; markdown: string; cursorMarkdown: string; claudeCodeMarkdown: string; spec: FeatureSpec } | null) => void;
   setSpecLoading: (v: boolean) => void;
+  setActiveBrief: (b: { title: string; markdown: string } | null) => void;
   runDiscover: (workspacePath: string) => Promise<void>;
   generateSpec: (workspacePath: string, title: string) => Promise<void>;
+  generateBrief: (workspacePath: string, title: string) => Promise<void>;
 }
 
 export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
@@ -24,11 +28,14 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
   activeSpec: null,
   specLoading: false,
   specError: null,
+  activeBrief: null,
+  briefLoading: false,
 
   setOpportunities: (opportunities) => set({ opportunities }),
   setLoading: (loading) => set({ loading }),
   setActiveSpec: (activeSpec) => set({ activeSpec }),
   setSpecLoading: (specLoading) => set({ specLoading }),
+  setActiveBrief: (activeBrief) => set({ activeBrief }),
 
   runDiscover: async (workspacePath: string) => {
     set({ loading: true, error: null });
@@ -78,6 +85,24 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
       set({ specError: `Spec generation failed: ${message}` });
     } finally {
       set({ specLoading: false });
+    }
+  },
+
+  generateBrief: async (workspacePath: string, title: string) => {
+    set({ briefLoading: true });
+    try {
+      const res = (await window.compass.engine.call("/write/brief", {
+        workspace_path: workspacePath,
+        opportunity_title: title,
+      })) as { status: string; markdown: string };
+
+      if (res.status === "ok") {
+        set({ activeBrief: { title, markdown: res.markdown } });
+      }
+    } catch (err) {
+      console.error("Brief generation failed:", err);
+    } finally {
+      set({ briefLoading: false });
     }
   },
 }));

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Database, FileCode2, Loader2, ThumbsUp, Star, ThumbsDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Database, FileCode2, FileText, Loader2, ThumbsUp, Star, ThumbsDown } from "lucide-react";
 import { clsx } from "clsx";
 import type { Opportunity, Confidence } from "../../types/engine";
 import { useWorkspaceStore } from "../../stores/workspace";
@@ -14,12 +14,14 @@ const confidenceStyles: Record<Confidence, string> = {
 interface Props {
   opportunity: Opportunity;
   onGenerateSpec: (title: string) => void;
+  onGenerateBrief: (title: string) => void;
   specLoading: boolean;
+  briefLoading: boolean;
 }
 
 type Rating = "known" | "surprise" | "wrong" | null;
 
-export default function OpportunityCard({ opportunity, onGenerateSpec, specLoading }: Props) {
+export default function OpportunityCard({ opportunity, onGenerateSpec, onGenerateBrief, specLoading, briefLoading }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [rating, setRating] = useState<Rating>(null);
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -103,21 +105,38 @@ export default function OpportunityCard({ opportunity, onGenerateSpec, specLoadi
             </div>
           )}
           <div className="flex items-center justify-between">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onGenerateSpec(opportunity.title);
-              }}
-              disabled={specLoading}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-compass-accent hover:bg-compass-accent-hover text-white text-sm font-medium transition-colors"
-            >
-              {specLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileCode2 className="w-4 h-4" />
-              )}
-              Generate Spec
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onGenerateSpec(opportunity.title);
+                }}
+                disabled={specLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-compass-accent hover:bg-compass-accent-hover text-white text-sm font-medium transition-colors"
+              >
+                {specLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileCode2 className="w-4 h-4" />
+                )}
+                Generate Spec
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onGenerateBrief(opportunity.title);
+                }}
+                disabled={briefLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-compass-border text-compass-muted hover:text-compass-text hover:border-compass-text/30 text-sm font-medium transition-colors"
+              >
+                {briefLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
+                Write Brief
+              </button>
+            </div>
             <div className="flex items-center gap-1">
               <span className="text-xs text-compass-muted mr-1">Rate:</span>
               <button
