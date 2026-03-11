@@ -22,3 +22,6 @@ T-1020,Sync dropping messages under load,When we have 50+ updates in a minute so
 T-1021,Would pay more for API access,Happy customer but our devs need API. Will increase spend if available.,feature_request,medium,open,2026-02-28,growth
 T-1022,Onboarding: took 3 tries to succeed,Two team members gave up on first attempt. Third time worked after I walked them through it.,ux_issue,medium,open,2026-02-28,smb
 T-1023,Sync latency now 8 seconds average,Monitoring our sync. Average went from 2s to 8s over 6 months. Unacceptable.,sync_latency,high,open,2026-02-28,enterprise
+T-1024,Lost deal because of sync reliability,"Prospect asked for sync reliability metrics. When we showed them our monitoring, they saw 87% success rate and walked. We lost a $60k deal.",sync_failure,critical,open,2026-03-01,enterprise
+T-1025,Sync completely down for 2 hours this morning,"All Jira↔Slack syncs stopped at 9am. No errors shown to users — syncs just silently failed. We only discovered because a customer called. Monitoring showed nothing.",sync_failure,critical,open,2026-03-03,enterprise
+T-1026,Evaluating Zapier as backup,"Our team is setting up Zapier fallbacks for critical syncs because we can't rely on SyncFlow anymore. If this continues, we'll migrate fully by Q2.",churn_risk,critical,open,2026-03-05,growth
