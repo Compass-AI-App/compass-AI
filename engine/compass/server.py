@@ -371,6 +371,37 @@ def discover(req: WorkspaceRequest):
     return {"status": "ok", "count": len(result), "opportunities": result}
 
 
+# ---------- Feedback ----------
+
+class FeedbackRequest(BaseModel):
+    workspace_path: str
+    opportunity_title: str
+    rating: str  # "known", "surprise", "wrong"
+
+
+@app.post("/feedback")
+def submit_feedback(req: FeedbackRequest):
+    base = Path(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    if req.rating not in ("known", "surprise", "wrong"):
+        raise HTTPException(400, f"Invalid rating '{req.rating}'. Use: known, surprise, wrong")
+
+    from compass.engine.history import record_feedback
+    entry = record_feedback(compass_dir, req.opportunity_title, req.rating)
+    return {"status": "ok", "feedback": entry}
+
+
+@app.post("/quality")
+def get_quality(req: WorkspaceRequest):
+    base = Path(req.workspace_path)
+    compass_dir = get_compass_dir(base)
+
+    from compass.engine.history import get_quality_stats
+    stats = get_quality_stats(compass_dir)
+    return {"status": "ok", **stats}
+
+
 # ---------- Specify ----------
 
 @app.post("/specify")

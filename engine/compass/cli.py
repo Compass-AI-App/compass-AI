@@ -870,6 +870,48 @@ def doctor(
         console.print(f"[yellow]{checks_passed} passed, {checks_failed} failed[/yellow]\n")
 
 
+# --- quality ---
+
+@app.command()
+def quality():
+    """Show insight quality stats — how often Compass surprises you."""
+    from compass.engine.history import get_quality_stats, _load_feedback
+
+    compass_dir = get_compass_dir()
+    stats = get_quality_stats(compass_dir)
+
+    if stats.get("total_ratings", 0) == 0:
+        console.print("\n[yellow]No feedback recorded yet.[/yellow]")
+        console.print("After running [bold]compass discover[/bold], rate each opportunity:")
+        console.print("  [green]star[/green]     — new insight (I didn't know this)")
+        console.print("  [dim]thumbs-up[/dim] — known (I already knew this)")
+        console.print("  [red]thumbs-down[/red] — wrong (this is incorrect)\n")
+        return
+
+    console.print("\n[bold]Insight Quality Report[/bold]\n")
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="dim")
+    table.add_column(style="bold")
+
+    table.add_row("Total ratings", str(stats.get("total_ratings", 0)))
+    table.add_row("New insights", f"{stats.get('surprises', 0)} ({stats.get('surprise_rate', 0)}%)")
+    table.add_row("Already known", str(stats.get("known", 0)))
+    table.add_row("Wrong/inaccurate", str(stats.get("wrong", 0)))
+    table.add_row("Accuracy rate", f"{stats.get('accuracy_rate', 0)}%")
+    console.print(table)
+
+    surprise_rate = stats.get("surprise_rate", 0)
+    if surprise_rate >= 30:
+        console.print("\n[green]Compass is surfacing new insights regularly.[/green]")
+    elif surprise_rate >= 10:
+        console.print("\n[yellow]Some new insights, but room to improve.[/yellow]")
+        console.print("[dim]Try adding more diverse evidence sources.[/dim]")
+    else:
+        console.print("\n[red]Low insight rate — Compass may need more evidence diversity.[/red]")
+    console.print()
+
+
 # --- quickstart ---
 
 @app.command()
