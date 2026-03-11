@@ -1,0 +1,224 @@
+"""Report Generator — produces shareable insight reports.
+
+Combines evidence summary, conflicts, opportunities, and next steps
+into a polished markdown or self-contained HTML document.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from compass.config import load_config, get_compass_dir
+from compass.engine.knowledge_graph import KnowledgeGraph
+from compass.models.sources import SourceType
+
+
+def generate_report(workspace: Path, format: str = "markdown") -> str:
+    """Generate a shareable insight report.
+
+    Args:
+        workspace: Path to the workspace root
+        format: "markdown" or "html"
+
+    Returns:
+        The report content as a string.
+    """
+    config = load_config(workspace)
+    compass_dir = get_compass_dir(workspace)
+    kg = KnowledgeGraph(persist_dir=compass_dir / "knowledge")
+
+    # Load cached data
+    conflicts = _load_conflicts(compass_dir)
+    opportunities = _load_opportunities(compass_dir)
+    quality = _load_quality(compass_dir)
+
+    # Build markdown report
+    md = _build_markdown(config.name, config.description, kg, conflicts, opportunities, quality)
+
+    if format == "html":
+        return _wrap_html(md, config.name)
+    return md
+
+
+def _load_conflicts(compass_dir: Path) -> list[dict]:
+    report_path = compass_dir / "output" / "conflict-report.md"
+    if not report_path.exists():
+        return []
+    # Parse conflict-report.md is fragile; try JSON cache first
+    # Conflicts aren't cached as JSON by default, so return raw markdown
+    return [{"raw": report_path.read_text()}]
+
+
+def _load_opportunities(compass_dir: Path) -> list[dict]:
+    cache_path = compass_dir / "opportunities_cache.json"
+    if not cache_path.exists():
+        return []
+    try:
+        return json.loads(cache_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _load_quality(compass_dir: Path) -> dict:
+    quality_path = compass_dir / "quality_log.json"
+    if not quality_path.exists():
+        return {}
+    try:
+        return json.loads(quality_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _build_markdown(
+    product_name: str,
+    description: str,
+    kg: KnowledgeGraph,
+    conflicts: list[dict],
+    opportunities: list[dict],
+    quality: dict,
+) -> str:
+    now = datetime.now().strftime("%B %d, %Y")
+    lines = [
+        f"# {product_name} — Product Discovery Report",
+        "",
+        f"*{description}*" if description else "",
+        f"*Generated {now}*",
+        "",
+    ]
+
+    # Evidence Summary
+    lines.append("## Evidence Summary")
+    lines.append("")
+    summary = kg.store.summary
+    total = len(kg)
+    lines.append(f"Analyzed **{total} evidence items** across {len(summary)} source types:")
+    lines.append("")
+    for source_type, count in sorted(summary.items()):
+        lines.append(f"- **{source_type.upper()}**: {count} items")
+    lines.append("")
+
+    # Conflicts
+    if conflicts and conflicts[0].get("raw"):
+        lines.append("## Key Conflicts")
+        lines.append("")
+        lines.append(conflicts[0]["raw"])
+        lines.append("")
+
+    # Opportunities
+    if opportunities:
+        lines.append("## Product Opportunities")
+        lines.append("")
+        lines.append(f"Found **{len(opportunities)} opportunities**, ranked by confidence and impact:")
+        lines.append("")
+
+        for opp in opportunities:
+            confidence = opp.get("confidence", "medium").upper()
+            lines.append(f"### #{opp.get('rank', '?')}: {opp.get('title', 'Untitled')}")
+            lines.append(f"**Confidence:** {confidence} | **Impact:** {opp.get('estimated_impact', 'N/A')}")
+            lines.append("")
+            lines.append(opp.get("description", ""))
+            lines.append("")
+            if opp.get("evidence_summary"):
+                lines.append(f"**Evidence:** {opp['evidence_summary']}")
+                lines.append("")
+
+    # Quality (if feedback exists)
+    if quality and quality.get("total_ratings", 0) > 0:
+        lines.append("## Insight Quality")
+        lines.append("")
+        lines.append(f"- **Surprise rate:** {quality.get('surprise_rate', 0)}% of insights were new to the team")
+        lines.append(f"- **Accuracy rate:** {quality.get('accuracy_rate', 0)}%")
+        lines.append(f"- Based on {quality.get('total_ratings', 0)} ratings")
+        lines.append("")
+
+    # Next Steps
+    if opportunities:
+        lines.append("## Recommended Next Steps")
+        lines.append("")
+        top = opportunities[0]
+        lines.append(f"1. **Address #{top.get('rank', 1)}: {top.get('title', '')}** — highest-confidence opportunity")
+        if len(opportunities) > 1:
+            lines.append(f"2. Investigate #{opportunities[1].get('rank', 2)}: {opportunities[1].get('title', '')}")
+        lines.append("3. Re-run `compass discover` after making changes to track progress")
+        lines.append("")
+
+    # Footer
+    lines.append("---")
+    lines.append(f"*Generated by [Compass](https://github.com/Compass-AI-App/compass-AI) on {now}*")
+    lines.append(f"*Evidence freshness: {total} items as of report generation*")
+
+    return "\n".join(lines)
+
+
+def _wrap_html(markdown_content: str, title: str) -> str:
+    """Convert markdown report to self-contained HTML."""
+    # Simple markdown-to-HTML conversion (no external deps)
+    import re
+
+    html_body = markdown_content
+
+    # Headers
+    html_body = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html_body, flags=re.MULTILINE)
+    html_body = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html_body, flags=re.MULTILINE)
+    html_body = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html_body, flags=re.MULTILINE)
+
+    # Bold and italic
+    html_body = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html_body)
+    html_body = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html_body)
+
+    # List items
+    html_body = re.sub(r"^- (.+)$", r"<li>\1</li>", html_body, flags=re.MULTILINE)
+    html_body = re.sub(r"^(\d+)\. (.+)$", r"<li>\2</li>", html_body, flags=re.MULTILINE)
+
+    # Horizontal rules
+    html_body = re.sub(r"^---$", r"<hr>", html_body, flags=re.MULTILINE)
+
+    # Links
+    html_body = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', html_body)
+
+    # Paragraphs (double newlines)
+    html_body = re.sub(r"\n\n", r"</p><p>", html_body)
+    html_body = f"<p>{html_body}</p>"
+
+    # Clean up empty paragraphs
+    html_body = re.sub(r"<p>\s*</p>", "", html_body)
+    html_body = re.sub(r"<p>(<h[123]>)", r"\1", html_body)
+    html_body = re.sub(r"(</h[123]>)</p>", r"\1", html_body)
+    html_body = re.sub(r"<p>(<hr>)</p>", r"\1", html_body)
+    html_body = re.sub(r"<p>(<li>)", r"<ul>\1", html_body)
+    html_body = re.sub(r"(</li>)</p>", r"\1</ul>", html_body)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title} — Discovery Report</title>
+<style>
+  body {{
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 0 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a;
+    line-height: 1.6;
+  }}
+  h1 {{ color: #111; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }}
+  h2 {{ color: #333; margin-top: 2em; }}
+  h3 {{ color: #555; }}
+  strong {{ color: #111; }}
+  em {{ color: #666; }}
+  li {{ margin: 4px 0; }}
+  hr {{ border: none; border-top: 1px solid #ddd; margin: 2em 0; }}
+  a {{ color: #6366f1; }}
+  .confidence-high {{ color: #22c55e; font-weight: bold; }}
+  .confidence-medium {{ color: #eab308; font-weight: bold; }}
+  .confidence-low {{ color: #94a3b8; }}
+</style>
+</head>
+<body>
+{html_body}
+</body>
+</html>"""
