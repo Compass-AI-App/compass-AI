@@ -6,12 +6,17 @@ Answers: "What do users WANT?"
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from compass.connectors.base import Connector
 from compass.models.sources import Evidence, SourceType
 
+logger = logging.getLogger(__name__)
+
 TRANSCRIPT_EXTENSIONS = {".md", ".txt", ".rst"}
+# Binary formats we recognize but can't parse yet
+BINARY_EXTENSIONS = {".docx", ".doc", ".pdf"}
 MAX_TRANSCRIPT_SIZE = 20_000
 
 
@@ -40,7 +45,13 @@ class InterviewConnector(Connector):
                 evidence.append(ev)
         elif p.is_dir():
             for fpath in sorted(p.rglob("*")):
-                if fpath.is_file() and fpath.suffix.lower() in TRANSCRIPT_EXTENSIONS:
+                if not fpath.is_file():
+                    continue
+                suffix = fpath.suffix.lower()
+                if suffix in BINARY_EXTENSIONS:
+                    logger.info("Skipping binary file %s (not yet supported)", fpath.name)
+                    continue
+                if suffix in TRANSCRIPT_EXTENSIONS:
                     ev = self._ingest_file(fpath)
                     if ev:
                         evidence.append(ev)
@@ -63,7 +74,8 @@ class InterviewConnector(Connector):
                 content=content,
                 metadata={"file": str(fpath), "type": "interview"},
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to ingest interview %s: %s", fpath, e)
             return None
 
     def _extract_title(self, content: str, fpath: Path) -> str:

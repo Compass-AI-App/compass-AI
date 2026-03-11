@@ -7,10 +7,13 @@ Answers: "What are users STRUGGLING with?"
 from __future__ import annotations
 
 import csv
+import logging
 from pathlib import Path
 
 from compass.connectors.base import Connector
 from compass.models.sources import Evidence, SourceType
+
+logger = logging.getLogger(__name__)
 
 MAX_TICKETS = 200
 
@@ -46,11 +49,26 @@ class SupportConnector(Connector):
 
         return evidence
 
+    def _detect_delimiter(self, fpath: Path) -> str:
+        """Detect CSV delimiter by sniffing the first few lines."""
+        try:
+            with open(fpath, newline="", errors="ignore") as f:
+                sample = f.read(4096)
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+            return dialect.delimiter
+        except csv.Error:
+            return ","
+
     def _ingest_csv(self, fpath: Path) -> list[Evidence]:
         """Ingest a CSV of support tickets. Expects columns like: title/subject, description/body, category/type."""
         try:
+            delimiter = self._detect_delimiter(fpath)
             with open(fpath, newline="", errors="ignore") as f:
-                reader = csv.DictReader(f)
+                # Skip BOM if present
+                first_char = f.read(1)
+                if first_char != "\ufeff":
+                    f.seek(0)
+                reader = csv.DictReader(f, delimiter=delimiter)
                 rows = list(reader)
 
             if not rows:
@@ -95,7 +113,7 @@ class SupportConnector(Connector):
                 categories: dict[str, list[str]] = {}
                 for row in rows[:MAX_TICKETS]:
                     values = list(row.values())
-                    cat = values[headers.index(category_col)]
+                    cat = values[headers.index(category_col)].strip()
                     title = values[headers.index(title_col)] if title_col else ""
                     body = values[headers.index(body_col)] if body_col else " | ".join(values)
                     categories.setdefault(cat, []).append(f"{title}: {body[:150]}")
@@ -112,7 +130,8 @@ class SupportConnector(Connector):
                     ))
 
             return evidence
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to ingest support CSV %s: %s", fpath, e)
             return []
 
     def _ingest_text(self, fpath: Path) -> Evidence | None:
@@ -127,11 +146,18 @@ class SupportConnector(Connector):
                 content=content[:10_000],
                 metadata={"file": str(fpath), "type": "support_text"},
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to ingest support text %s: %s", fpath, e)
             return None
 
     def _find_column(self, headers: list[str], candidates: list[str]) -> str | None:
+        # Exact match first
         for candidate in candidates:
             if candidate in headers:
                 return candidate
+        # Substring match (e.g., "issue_title" matches "title")
+        for candidate in candidates:
+            for header in headers:
+                if candidate in header:
+                    return header
         return None

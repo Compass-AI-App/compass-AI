@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 from pathlib import Path
 
 from compass.connectors.base import Connector
 from compass.models.sources import Evidence, SourceType
+
+logger = logging.getLogger(__name__)
 
 MAX_ROWS = 500
 
@@ -56,10 +59,25 @@ class AnalyticsConnector(Connector):
             return self._ingest_json(fpath)
         return []
 
-    def _ingest_csv(self, fpath: Path) -> list[Evidence]:
+    def _detect_delimiter(self, fpath: Path) -> str:
+        """Detect CSV delimiter by sniffing the first few lines."""
         try:
             with open(fpath, newline="", errors="ignore") as f:
-                reader = csv.DictReader(f)
+                sample = f.read(4096)
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+            return dialect.delimiter
+        except csv.Error:
+            return ","
+
+    def _ingest_csv(self, fpath: Path) -> list[Evidence]:
+        try:
+            delimiter = self._detect_delimiter(fpath)
+            with open(fpath, newline="", errors="ignore") as f:
+                # Skip BOM if present
+                first_char = f.read(1)
+                if first_char != "\ufeff":
+                    f.seek(0)
+                reader = csv.DictReader(f, delimiter=delimiter)
                 rows = []
                 for i, row in enumerate(reader):
                     if i >= MAX_ROWS:
@@ -86,13 +104,22 @@ class AnalyticsConnector(Connector):
                 content="\n".join(summary_lines),
                 metadata={"file": str(fpath), "type": "csv", "rows": len(rows), "columns": headers},
             )]
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to ingest CSV %s: %s", fpath, e)
             return []
 
     def _ingest_json(self, fpath: Path) -> list[Evidence]:
         try:
             content = fpath.read_text(errors="ignore")
-            data = json.loads(content)
+            # Handle JSONL (one JSON object per line)
+            if fpath.suffix.lower() == ".jsonl":
+                data = []
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line:
+                        data.append(json.loads(line))
+            else:
+                data = json.loads(content)
 
             if isinstance(data, list):
                 summary = json.dumps(data[:20], indent=2)
@@ -111,5 +138,6 @@ class AnalyticsConnector(Connector):
                 content=f"Dataset: {fpath.name}\nRecords: {count}\n\n{summary}",
                 metadata={"file": str(fpath), "type": "json", "records": count},
             )]
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to ingest JSON %s: %s", fpath, e)
             return []
