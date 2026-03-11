@@ -12,6 +12,8 @@ interface OpportunitiesState {
   briefLoading: boolean;
   activeChallenge: { title: string; markdown: string } | null;
   challengeLoading: boolean;
+  activeExperiment: { title: string; markdown: string } | null;
+  experimentLoading: boolean;
 
   setOpportunities: (o: Opportunity[]) => void;
   setLoading: (v: boolean) => void;
@@ -19,10 +21,12 @@ interface OpportunitiesState {
   setSpecLoading: (v: boolean) => void;
   setActiveBrief: (b: { title: string; markdown: string } | null) => void;
   setActiveChallenge: (c: { title: string; markdown: string } | null) => void;
+  setActiveExperiment: (e: { title: string; markdown: string } | null) => void;
   runDiscover: (workspacePath: string) => Promise<void>;
   generateSpec: (workspacePath: string, title: string) => Promise<void>;
   generateBrief: (workspacePath: string, title: string) => Promise<void>;
   generateChallenge: (workspacePath: string, title: string) => Promise<void>;
+  designExperiment: (workspacePath: string, title: string) => Promise<void>;
 }
 
 export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
@@ -36,6 +40,8 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
   briefLoading: false,
   activeChallenge: null,
   challengeLoading: false,
+  activeExperiment: null,
+  experimentLoading: false,
 
   setOpportunities: (opportunities) => set({ opportunities }),
   setLoading: (loading) => set({ loading }),
@@ -43,6 +49,7 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
   setSpecLoading: (specLoading) => set({ specLoading }),
   setActiveBrief: (activeBrief) => set({ activeBrief }),
   setActiveChallenge: (activeChallenge) => set({ activeChallenge }),
+  setActiveExperiment: (activeExperiment) => set({ activeExperiment }),
 
   runDiscover: async (workspacePath: string) => {
     set({ loading: true, error: null });
@@ -128,6 +135,24 @@ export const useOpportunitiesStore = create<OpportunitiesState>((set) => ({
       console.error("Challenge generation failed:", err);
     } finally {
       set({ challengeLoading: false });
+    }
+  },
+
+  designExperiment: async (workspacePath: string, title: string) => {
+    set({ experimentLoading: true });
+    try {
+      const res = (await window.compass.engine.call("/experiment", {
+        workspace_path: workspacePath,
+        opportunity_title: title,
+      })) as { status: string; markdown: string };
+
+      if (res.status === "ok") {
+        set({ activeExperiment: { title, markdown: res.markdown } });
+      }
+    } catch (err) {
+      console.error("Experiment design failed:", err);
+    } finally {
+      set({ experimentLoading: false });
     }
   },
 }));

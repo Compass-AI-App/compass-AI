@@ -20,13 +20,17 @@ export default function DiscoverPage() {
     briefLoading,
     activeChallenge,
     challengeLoading,
+    activeExperiment,
+    experimentLoading,
     runDiscover,
     generateSpec,
     generateBrief,
     generateChallenge,
+    designExperiment,
     setActiveSpec,
     setActiveBrief,
     setActiveChallenge,
+    setActiveExperiment,
   } = useOpportunitiesStore();
 
   const [exporting, setExporting] = useState(false);
@@ -57,6 +61,10 @@ export default function DiscoverPage() {
 
   function handleChallenge(title: string) {
     if (workspacePath) generateChallenge(workspacePath, title);
+  }
+
+  function handleDesignExperiment(title: string) {
+    if (workspacePath) designExperiment(workspacePath, title);
   }
 
   async function handleWriteUpdate() {
@@ -202,9 +210,11 @@ export default function DiscoverPage() {
               onGenerateSpec={handleGenerateSpec}
               onGenerateBrief={handleGenerateBrief}
               onChallenge={handleChallenge}
+              onDesignExperiment={handleDesignExperiment}
               specLoading={specLoading}
               briefLoading={briefLoading}
               challengeLoading={challengeLoading}
+              experimentLoading={experimentLoading}
             />
           ))}
         </div>
@@ -296,6 +306,15 @@ export default function DiscoverPage() {
           title={`Challenge: ${activeChallenge.title}`}
           markdown={activeChallenge.markdown}
           onClose={() => setActiveChallenge(null)}
+        />
+      )}
+
+      {/* Experiment slide-over */}
+      {activeExperiment && (
+        <DocumentView
+          title={`Experiment: ${activeExperiment.title}`}
+          markdown={activeExperiment.markdown}
+          onClose={() => setActiveExperiment(null)}
         />
       )}
     </div>
