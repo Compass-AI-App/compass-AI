@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Code2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Loader2, Code2, ArrowLeft, Blocks } from "lucide-react";
 import { useWorkspaceStore } from "../stores/workspace";
 import { usePrototypesStore } from "../stores/prototypes";
 import PrototypePreview from "../components/prototype/PrototypePreview";
+import ComponentLibrary from "../components/prototype/ComponentLibrary";
 import type { PrototypeData } from "../components/prototype/PrototypePreview";
 
 const PROTOTYPE_TYPES = [
@@ -28,6 +29,7 @@ export default function PrototypesPage() {
   } = usePrototypesStore();
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const [description, setDescription] = useState("");
   const [protoType, setProtoType] = useState("landing-page");
 
@@ -146,13 +148,23 @@ export default function PrototypesPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-compass-muted mb-1.5">
-                Description
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-compass-muted">
+                  Description
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowLibrary(true)}
+                  className="flex items-center gap-1 text-xs text-compass-accent hover:text-compass-accent/80 transition-colors"
+                >
+                  <Blocks className="w-3.5 h-3.5" />
+                  Browse Components
+                </button>
+              </div>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe what the prototype should show..."
+                placeholder="Describe what the prototype should show... (e.g., 'A landing page for a project management tool with hero, features, and pricing')"
                 rows={3}
                 className="w-full px-3 py-2 bg-compass-bg border border-compass-border rounded-lg text-sm text-compass-text placeholder:text-compass-muted focus:outline-none focus:border-compass-accent resize-none"
               />
@@ -175,6 +187,21 @@ export default function PrototypesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Component library modal */}
+      {showLibrary && (
+        <ComponentLibrary
+          onInsert={(html) => {
+            setDescription((prev) =>
+              prev
+                ? `${prev}\n\nInclude this component:\n${html}`
+                : `Include this component:\n${html}`,
+            );
+            setShowLibrary(false);
+          }}
+          onClose={() => setShowLibrary(false)}
+        />
       )}
 
       {/* Prototype gallery */}
