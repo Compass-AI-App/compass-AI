@@ -1,7 +1,11 @@
-"""GitHub / local code connector — the CODE source of truth.
+"""GitHub connector — the CODE source of truth.
 
 Ingests: README, key source files, recent commits, open issues/PRs.
 Answers: "What CAN the product do?"
+
+Dual-mode:
+  - Live API: Fetches via GitHub REST API when OAuth credentials are available
+  - File import: Reads from local repo path (fallback)
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from compass.connectors.base import Connector
+from compass.connectors.live_base import LiveConnector
 from compass.models.sources import Evidence, SourceType
 
 logger = logging.getLogger(__name__)
@@ -28,11 +32,15 @@ SKIP_DIRS = {
 MAX_FILE_SIZE = 50_000  # chars
 MAX_FILES = 50
 
+GITHUB_API = "https://api.github.com"
 
-class GitHubConnector(Connector):
-    """Ingests code evidence from a local repo or GitHub."""
+
+class GitHubConnector(LiveConnector):
+    """Ingests code evidence from a local repo or GitHub API."""
 
     connector_type = "github"
+    provider_id = "github"
+    rate_limit_rpm = 60  # GitHub allows 5000/hr for authenticated users
 
     def validate(self) -> bool:
         path = self.config.path
@@ -40,18 +48,182 @@ class GitHubConnector(Connector):
             return True
         url = self.config.url
         if url:
-            return True  # GitHub API validation would go here
+            return True
+        if self.has_credentials():
+            return True
         return False
 
-    def ingest(self) -> list[Evidence]:
+    # ------------------------------------------------------------------
+    # Live API ingestion
+    # ------------------------------------------------------------------
+
+    def ingest_live(self) -> list[Evidence]:
+        """Fetch evidence from GitHub REST API."""
         evidence: list[Evidence] = []
 
+        repo_slug = self._get_repo_slug()
+        if not repo_slug:
+            logger.warning("No repo slug configured for GitHub live connector")
+            return self.ingest_file()
+
+        owner, repo = repo_slug.split("/", 1)
+
+        # Repo metadata
+        try:
+            meta = self._api_get(f"{GITHUB_API}/repos/{owner}/{repo}").json()
+            evidence.append(Evidence(
+                source_type=SourceType.CODE,
+                connector="github",
+                title=f"Repository: {meta.get('full_name', repo_slug)}",
+                content=(
+                    f"Name: {meta.get('full_name')}\n"
+                    f"Description: {meta.get('description', 'N/A')}\n"
+                    f"Language: {meta.get('language', 'N/A')}\n"
+                    f"Stars: {meta.get('stargazers_count', 0)}\n"
+                    f"Forks: {meta.get('forks_count', 0)}\n"
+                    f"Open issues: {meta.get('open_issues_count', 0)}\n"
+                    f"Default branch: {meta.get('default_branch', 'main')}\n"
+                    f"Topics: {', '.join(meta.get('topics', []))}\n"
+                ),
+                metadata={"type": "repo_metadata", "repo": repo_slug, "source": "api"},
+            ))
+        except Exception as e:
+            logger.warning("Failed to fetch repo metadata: %s", e)
+
+        # README
+        try:
+            readme_res = self._api_get(
+                f"{GITHUB_API}/repos/{owner}/{repo}/readme",
+                headers={"Accept": "application/vnd.github.raw+json"},
+            )
+            readme_content = readme_res.text[:MAX_FILE_SIZE]
+            evidence.append(Evidence(
+                source_type=SourceType.CODE,
+                connector="github",
+                title=f"README: {repo}",
+                content=readme_content,
+                metadata={"type": "readme", "repo": repo_slug, "source": "api"},
+            ))
+        except Exception as e:
+            logger.debug("No README or failed to fetch: %s", e)
+
+        # Recent commits (last 30)
+        try:
+            commits = self._api_get(
+                f"{GITHUB_API}/repos/{owner}/{repo}/commits",
+                params={"per_page": "30"},
+            ).json()
+            lines = []
+            for c in commits:
+                date = c.get("commit", {}).get("author", {}).get("date", "")[:10]
+                msg = c.get("commit", {}).get("message", "").split("\n")[0]
+                author = c.get("commit", {}).get("author", {}).get("name", "")
+                lines.append(f"- {date} | {author} | {msg}")
+            if lines:
+                evidence.append(Evidence(
+                    source_type=SourceType.CODE,
+                    connector="github",
+                    title=f"Recent commits: {repo}",
+                    content="\n".join(lines),
+                    metadata={"type": "git_log", "repo": repo_slug, "source": "api"},
+                ))
+        except Exception as e:
+            logger.warning("Failed to fetch commits: %s", e)
+
+        # Open issues (last 30)
+        try:
+            issues = self._api_get(
+                f"{GITHUB_API}/repos/{owner}/{repo}/issues",
+                params={"state": "open", "per_page": "30", "sort": "updated"},
+            ).json()
+            for issue in issues:
+                if issue.get("pull_request"):
+                    continue  # Skip PRs (handled below)
+                labels = ", ".join(l.get("name", "") for l in issue.get("labels", []))
+                body = (issue.get("body") or "")[:5000]
+                evidence.append(Evidence(
+                    source_type=SourceType.CODE,
+                    connector="github",
+                    title=f"Issue #{issue['number']}: {issue.get('title', '')}",
+                    content=(
+                        f"State: {issue.get('state')}\n"
+                        f"Labels: {labels}\n"
+                        f"Author: {issue.get('user', {}).get('login', '')}\n"
+                        f"Created: {issue.get('created_at', '')[:10]}\n"
+                        f"Updated: {issue.get('updated_at', '')[:10]}\n\n"
+                        f"{body}"
+                    ),
+                    metadata={
+                        "type": "issue",
+                        "number": str(issue["number"]),
+                        "repo": repo_slug,
+                        "source": "api",
+                    },
+                ))
+        except Exception as e:
+            logger.warning("Failed to fetch issues: %s", e)
+
+        # Open pull requests (last 30)
+        try:
+            prs = self._api_get(
+                f"{GITHUB_API}/repos/{owner}/{repo}/pulls",
+                params={"state": "open", "per_page": "30", "sort": "updated"},
+            ).json()
+            for pr in prs:
+                body = (pr.get("body") or "")[:5000]
+                evidence.append(Evidence(
+                    source_type=SourceType.CODE,
+                    connector="github",
+                    title=f"PR #{pr['number']}: {pr.get('title', '')}",
+                    content=(
+                        f"State: {pr.get('state')}\n"
+                        f"Author: {pr.get('user', {}).get('login', '')}\n"
+                        f"Base: {pr.get('base', {}).get('ref', '')}\n"
+                        f"Head: {pr.get('head', {}).get('ref', '')}\n"
+                        f"Created: {pr.get('created_at', '')[:10]}\n"
+                        f"Updated: {pr.get('updated_at', '')[:10]}\n\n"
+                        f"{body}"
+                    ),
+                    metadata={
+                        "type": "pull_request",
+                        "number": str(pr["number"]),
+                        "repo": repo_slug,
+                        "source": "api",
+                    },
+                ))
+        except Exception as e:
+            logger.warning("Failed to fetch PRs: %s", e)
+
+        logger.info("GitHub live: fetched %d evidence items from %s", len(evidence), repo_slug)
+        return evidence
+
+    def _get_repo_slug(self) -> str | None:
+        """Extract owner/repo from config URL or options."""
+        # Check options first
+        slug = self.config.options.get("repo")
+        if slug:
+            return slug
+
+        # Parse from URL (e.g. https://github.com/owner/repo)
+        url = self.config.url
+        if url:
+            parts = url.rstrip("/").split("/")
+            if len(parts) >= 2:
+                return f"{parts[-2]}/{parts[-1]}"
+
+        return None
+
+    # ------------------------------------------------------------------
+    # File-based ingestion (original behavior)
+    # ------------------------------------------------------------------
+
+    def ingest_file(self) -> list[Evidence]:
+        evidence: list[Evidence] = []
         path = self.config.path
         if path:
             repo_path = Path(path).expanduser().resolve()
             if repo_path.exists():
                 evidence.extend(self._ingest_local(repo_path))
-
         return evidence
 
     def _ingest_local(self, repo_path: Path) -> list[Evidence]:
