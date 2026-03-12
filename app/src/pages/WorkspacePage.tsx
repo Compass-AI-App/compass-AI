@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Home, Plus } from "lucide-react";
+import { Home, Plus, Building2, Smartphone, Boxes, Store, Wrench, ArrowLeft } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useWorkspaceManager } from "../stores/workspaceManager";
@@ -137,12 +137,51 @@ function StatusCard({ label, value, detail }: { label: string; value: number; de
   );
 }
 
+interface TemplateInfo {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  recommended_sources: string[];
+  default_chat_mode: string;
+  example_questions: string[];
+}
+
+const templateIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  Building2,
+  Smartphone,
+  Boxes,
+  Store,
+  Wrench,
+};
+
 function CreateWorkspace({ onCancel }: { onCancel: () => void }) {
   const setWorkspace = useWorkspaceStore((s) => s.setWorkspace);
   const { addWorkspace } = useWorkspaceManager();
+  const [step, setStep] = useState<"template" | "details">("template");
+  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = (await window.compass.engine.call("/templates", {})) as {
+          templates: TemplateInfo[];
+        };
+        setTemplates(res.templates || []);
+      } catch {
+        // Templates endpoint may not be available
+      }
+    })();
+  }, []);
+
+  function handleSelectTemplate(tmpl: TemplateInfo | null) {
+    setSelectedTemplate(tmpl);
+    setStep("details");
+  }
 
   async function handleCreate() {
     if (!name.trim()) return;
@@ -155,15 +194,29 @@ function CreateWorkspace({ onCancel }: { onCancel: () => void }) {
         return;
       }
 
-      const res = (await window.compass.engine.call("/init", {
-        workspace_path: dir,
-        name: name.trim(),
-        description: desc.trim(),
-      })) as { status: string };
+      if (selectedTemplate) {
+        const res = (await window.compass.engine.call("/templates/init", {
+          workspace_path: dir,
+          template_id: selectedTemplate.id,
+          product_name: name.trim(),
+          product_description: desc.trim(),
+        })) as { status: string };
 
-      if (res.status === "ok") {
-        await addWorkspace({ name: name.trim(), description: desc.trim(), path: dir });
-        setWorkspace(dir, name.trim(), desc.trim());
+        if (res.status === "ok") {
+          await addWorkspace({ name: name.trim(), description: desc.trim(), path: dir });
+          setWorkspace(dir, name.trim(), desc.trim());
+        }
+      } else {
+        const res = (await window.compass.engine.call("/init", {
+          workspace_path: dir,
+          name: name.trim(),
+          description: desc.trim(),
+        })) as { status: string };
+
+        if (res.status === "ok") {
+          await addWorkspace({ name: name.trim(), description: desc.trim(), path: dir });
+          setWorkspace(dir, name.trim(), desc.trim());
+        }
       }
     } catch (err) {
       console.error("Create failed:", err);
@@ -172,14 +225,74 @@ function CreateWorkspace({ onCancel }: { onCancel: () => void }) {
     }
   }
 
+  if (step === "template") {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-full max-w-lg p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-lg bg-compass-accent/10">
+              <Plus className="w-5 h-5 text-compass-accent" />
+            </div>
+            <h1 className="text-xl font-semibold text-compass-text">Choose a Template</h1>
+          </div>
+
+          <div className="space-y-2 mb-4">
+            {templates.map((tmpl) => {
+              const Icon = templateIcons[tmpl.icon] || Boxes;
+              return (
+                <button
+                  key={tmpl.id}
+                  onClick={() => handleSelectTemplate(tmpl)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-compass-card border border-compass-border text-left hover:border-compass-accent/50 transition-colors"
+                >
+                  <Icon className="w-5 h-5 text-compass-accent shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-compass-text">{tmpl.name}</p>
+                    <p className="text-xs text-compass-muted truncate">{tmpl.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="px-4 py-2.5 rounded-lg text-sm border border-compass-border text-compass-muted hover:text-compass-text transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleSelectTemplate(null)}
+              className="flex-1 py-2.5 rounded-lg text-sm font-medium text-compass-muted hover:text-compass-text border border-compass-border hover:border-compass-accent/50 transition-colors"
+            >
+              Start from Scratch
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-center h-full">
       <div className="w-full max-w-md p-8">
         <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={() => setStep("template")}
+            className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 text-compass-muted" />
+          </button>
           <div className="p-2 rounded-lg bg-compass-accent/10">
             <Plus className="w-5 h-5 text-compass-accent" />
           </div>
-          <h1 className="text-xl font-semibold text-compass-text">Create New Product</h1>
+          <div>
+            <h1 className="text-xl font-semibold text-compass-text">Create New Product</h1>
+            {selectedTemplate && (
+              <p className="text-xs text-compass-muted">Template: {selectedTemplate.name}</p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -203,6 +316,14 @@ function CreateWorkspace({ onCancel }: { onCancel: () => void }) {
               className="w-full px-3 py-2 rounded-lg bg-compass-card border border-compass-border text-compass-text text-sm placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-compass-accent resize-none"
             />
           </div>
+          {selectedTemplate && (
+            <div className="rounded-lg bg-compass-accent/5 border border-compass-accent/20 p-3">
+              <p className="text-xs font-medium text-compass-accent mb-1">Pre-configured sources</p>
+              <p className="text-xs text-compass-muted">
+                {selectedTemplate.recommended_sources.join(", ")}
+              </p>
+            </div>
+          )}
           <div className="flex gap-3">
             <button
               onClick={onCancel}
