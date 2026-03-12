@@ -208,6 +208,35 @@ def init_workspace(req: InitRequest):
     return {"status": "ok", "workspace": req.workspace_path, "name": req.name, "git_initialized": git_created}
 
 
+# ---------- Git ----------
+
+
+class GitPushRequest(BaseModel):
+    workspace_path: str
+    repo_name: str
+    private: bool = True
+
+
+@app.post("/git/push")
+def git_push(req: GitPushRequest):
+    """Create a GitHub repo and push the workspace to it."""
+    cred = _credentials.get("github")
+    if not cred:
+        raise HTTPException(401, "GitHub not connected. Please connect GitHub in Settings first.")
+
+    token = cred.get("access_token")
+    if not token:
+        raise HTTPException(401, "No GitHub access token available.")
+
+    from compass.git_utils import push_to_github
+    result = push_to_github(Path(req.workspace_path), req.repo_name, token, req.private)
+
+    if result["status"] == "error":
+        raise HTTPException(400, result["error"])
+
+    return result
+
+
 # ---------- Workspace Info ----------
 
 @app.post("/workspace/info")
