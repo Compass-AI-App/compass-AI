@@ -6,6 +6,8 @@ import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import EditorToolbar from "./EditorToolbar";
 import AIAssist from "./AIAssist";
+import CitationInsert from "./CitationInsert";
+import { Citation } from "./extensions/citation";
 
 interface DocumentEditorProps {
   content?: string | Record<string, unknown>;
@@ -118,6 +120,7 @@ export default function DocumentEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder }),
+      Citation,
     ],
     content: content
       ? content
@@ -147,9 +150,12 @@ export default function DocumentEditor({
       {editable && (
         <div className="flex items-center border-b border-compass-border">
           <EditorToolbar editor={editor} />
-          <div className="ml-auto pr-2">
+          <div className="ml-auto pr-2 flex items-center gap-1">
             {workspacePath && (
-              <AIAssist editor={editor} workspacePath={workspacePath} docType={docType} />
+              <>
+                <CitationInsert editor={editor} workspacePath={workspacePath} />
+                <AIAssist editor={editor} workspacePath={workspacePath} docType={docType} />
+              </>
             )}
           </div>
         </div>
