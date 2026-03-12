@@ -14,6 +14,19 @@ CONFIG_FILE = "compass.yaml"
 OUTPUT_DIR = "output"
 
 
+class AuthConfig(BaseModel):
+    """Auth configuration for a source connector.
+
+    The credential_ref is a logical key (e.g. "github") that maps to
+    credentials stored in the Electron vault. The engine never persists
+    raw tokens — they are injected at runtime via POST /credentials/inject.
+    """
+
+    method: str = "oauth"  # "oauth", "api_key", "pat"
+    credential_ref: str = ""  # e.g. "github", "atlassian", "slack"
+    scopes: list[str] = Field(default_factory=list)
+
+
 class SourceConfig(BaseModel):
     """Configuration for a single evidence source."""
 
@@ -22,6 +35,7 @@ class SourceConfig(BaseModel):
     path: str | None = None
     url: str | None = None
     options: dict = Field(default_factory=dict)
+    auth: AuthConfig | None = None
 
 
 class ProductConfig(BaseModel):

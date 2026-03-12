@@ -30,6 +30,9 @@ from compass.engine.specifier import Specifier
 _kg: KnowledgeGraph | None = None
 _kg_workspace_path: str | None = None
 
+# In-memory credential store — tokens injected by Electron, never persisted to disk
+_credentials: dict[str, dict] = {}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -99,6 +102,14 @@ class ConfigureRequest(BaseModel):
     provider: str = "anthropic"
 
 
+class InjectCredentialRequest(BaseModel):
+    provider: str
+    access_token: str
+    refresh_token: str | None = None
+    expires_at: int | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
 # ---------- Health ----------
 
 @app.get("/health")
@@ -138,6 +149,48 @@ def configure(req: ConfigureRequest):
         }
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+# ---------- Credential Injection ----------
+
+@app.post("/credentials/inject")
+def inject_credential(req: InjectCredentialRequest):
+    """Inject a decrypted credential at runtime. Held in memory only."""
+    _credentials[req.provider] = {
+        "provider": req.provider,
+        "access_token": req.access_token,
+        "refresh_token": req.refresh_token,
+        "expires_at": req.expires_at,
+        "metadata": req.metadata,
+    }
+    return {"status": "ok", "provider": req.provider}
+
+
+@app.post("/credentials/revoke")
+def revoke_credential(req: dict):
+    """Remove an injected credential from memory."""
+    provider = req.get("provider", "")
+    _credentials.pop(provider, None)
+    return {"status": "ok", "provider": provider}
+
+
+@app.get("/credentials/status")
+def credentials_status():
+    """List injected credentials (without token values)."""
+    result = []
+    for provider, cred in _credentials.items():
+        result.append({
+            "provider": provider,
+            "has_token": bool(cred.get("access_token")),
+            "expires_at": cred.get("expires_at"),
+            "metadata": cred.get("metadata", {}),
+        })
+    return {"status": "ok", "credentials": result}
+
+
+def get_credential(provider: str) -> dict | None:
+    """Get an injected credential by provider name. Used by live connectors."""
+    return _credentials.get(provider)
 
 
 # ---------- Init ----------

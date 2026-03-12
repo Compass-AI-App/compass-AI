@@ -81,12 +81,19 @@ export interface FeatureSpec {
   markdown?: string;
 }
 
+export interface AuthConfig {
+  method: "oauth" | "api_key" | "pat";
+  credential_ref: string;
+  scopes: string[];
+}
+
 export interface SourceConfig {
   type: string;
   name: string;
   path: string | null;
   url: string | null;
   options: Record<string, unknown>;
+  auth?: AuthConfig | null;
 }
 
 export interface ProductConfig {
