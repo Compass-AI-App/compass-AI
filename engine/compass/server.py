@@ -1087,6 +1087,52 @@ def discover_stream(req: WorkspaceRequest):
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+# ---------- Sync endpoints ----------
+
+from compass.sync import scheduler
+
+
+class SyncScheduleRequest(BaseModel):
+    workspace_path: str
+    source_name: str
+    interval_minutes: int = 60
+
+
+@app.post("/sync/schedule")
+def sync_schedule(req: SyncScheduleRequest):
+    """Schedule periodic sync for a source."""
+    status = scheduler.schedule(req.source_name, req.interval_minutes)
+    return {"status": "scheduled", **status.to_dict()}
+
+
+@app.post("/sync/unschedule")
+def sync_unschedule(req: SyncScheduleRequest):
+    """Stop scheduled sync for a source."""
+    scheduler.unschedule(req.source_name)
+    return {"status": "unscheduled", "source_name": req.source_name}
+
+
+@app.post("/sync/now")
+def sync_now(req: SyncScheduleRequest):
+    """Trigger an immediate sync for a source."""
+    status = scheduler.sync_now(req.source_name)
+    return {"status": "synced", **status.to_dict()}
+
+
+class SyncStatusRequest(BaseModel):
+    workspace_path: str
+    source_name: str | None = None
+
+
+@app.post("/sync/status")
+def sync_status(req: SyncStatusRequest):
+    """Get sync status for one or all sources."""
+    result = scheduler.get_status(req.source_name)
+    if isinstance(result, list):
+        return {"sources": result}
+    return result
+
+
 # ---------- Helpers ----------
 
 def _get_kg(workspace_path: str) -> KnowledgeGraph:

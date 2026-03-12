@@ -11,6 +11,7 @@ import {
   ChevronDown,
   FolderOpen,
   Plus,
+  RefreshCw,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../../stores/workspace";
@@ -49,6 +50,7 @@ export default function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const loadProfile = useAuthStore((s) => s.loadProfile);
   const navigate = useNavigate();
+  const [syncingCount, setSyncingCount] = useState(0);
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +101,23 @@ export default function Sidebar() {
     }, 30000);
     return () => clearInterval(interval);
   }, [engineStatus, fetchUsage]);
+
+  // Poll sync status
+  useEffect(() => {
+    if (engineStatus !== "ready" || !workspacePath) return;
+    async function checkSync() {
+      try {
+        const res = await window.compass?.engine.call("/sync/status", { workspace_path: workspacePath }) as { sources?: Array<{ syncing: boolean }> };
+        const syncing = res?.sources?.filter((s) => s.syncing).length || 0;
+        setSyncingCount(syncing);
+      } catch {
+        // Sync endpoints may not be available
+      }
+    }
+    checkSync();
+    const interval = setInterval(checkSync, 15000);
+    return () => clearInterval(interval);
+  }, [engineStatus, workspacePath]);
 
   return (
     <aside className="flex flex-col w-[220px] h-full bg-compass-sidebar border-r border-compass-border select-none">
@@ -230,6 +249,12 @@ export default function Sidebar() {
               Engine {engineStatus}
             </span>
           </div>
+          {syncingCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-compass-accent">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Syncing {syncingCount} source{syncingCount > 1 ? "s" : ""}
+            </div>
+          )}
           {tokenUsage.total > 0 && (
             <div className="text-xs text-compass-muted">
               {tokenUsage.total.toLocaleString()} tokens &middot; {tokenUsage.cost}
