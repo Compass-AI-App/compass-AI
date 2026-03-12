@@ -46,4 +46,8 @@ contextBridge.exposeInMainWorld("compass", {
     refresh: (providerConfig: unknown, refreshToken: string) =>
       ipcRenderer.invoke("oauth-refresh", providerConfig, refreshToken),
   },
+  providers: {
+    get: (id: string) => ipcRenderer.invoke("provider-get", id),
+    list: () => ipcRenderer.invoke("provider-list"),
+  },
 });
