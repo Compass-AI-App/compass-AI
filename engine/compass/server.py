@@ -1258,6 +1258,14 @@ class PrototypeGenerateRequest(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
 
 
+class PrototypeVariantsRequest(BaseModel):
+    workspace_path: str
+    description: str
+    prototype_type: str = "landing-page"
+    num_variants: int = 3
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
 class PrototypeIterateRequest(BaseModel):
     workspace_path: str
     html: str
@@ -1286,6 +1294,28 @@ def prototype_generate(req: PrototypeGenerateRequest):
     return {
         "status": "ok",
         "prototype": prototype.model_dump(),
+    }
+
+
+@app.post("/prototype/variants")
+def prototype_variants(req: PrototypeVariantsRequest):
+    """Generate multiple variant prototypes for A/B comparison."""
+    kg = _try_get_kg(req.workspace_path)
+    if not kg or len(kg) == 0:
+        raise HTTPException(400, "No evidence available. Ingest sources first.")
+
+    from compass.engine.prototyper import Prototyper
+    prototyper = Prototyper(kg)
+    variants = prototyper.generate_variants(
+        description=req.description,
+        prototype_type=req.prototype_type,
+        num_variants=req.num_variants,
+        evidence_ids=req.evidence_ids or None,
+    )
+
+    return {
+        "status": "ok",
+        "variants": [v.model_dump() for v in variants],
     }
 
 

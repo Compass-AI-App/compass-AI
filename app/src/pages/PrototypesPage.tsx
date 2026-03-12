@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Code2, ArrowLeft, Blocks } from "lucide-react";
+import { Plus, Trash2, Loader2, Code2, ArrowLeft, Blocks, GitBranch } from "lucide-react";
 import { useWorkspaceStore } from "../stores/workspace";
 import { usePrototypesStore } from "../stores/prototypes";
 import PrototypePreview from "../components/prototype/PrototypePreview";
 import ComponentLibrary from "../components/prototype/ComponentLibrary";
+import VariantComparison from "../components/prototype/VariantComparison";
 import type { PrototypeData } from "../components/prototype/PrototypePreview";
 
 const PROTOTYPE_TYPES = [
@@ -30,6 +31,9 @@ export default function PrototypesPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showVariants, setShowVariants] = useState(false);
+  const [variants, setVariants] = useState<PrototypeData[]>([]);
+  const [generatingVariants, setGeneratingVariants] = useState(false);
   const [description, setDescription] = useState("");
   const [protoType, setProtoType] = useState("landing-page");
 
@@ -43,6 +47,43 @@ export default function PrototypesPage() {
     await generate(workspacePath, description.trim(), protoType);
     setDescription("");
     setProtoType("landing-page");
+  }
+
+  async function handleGenerateVariants() {
+    if (!description.trim() || !workspacePath) return;
+    setShowCreate(false);
+    setGeneratingVariants(true);
+    try {
+      const res = (await window.compass.engine.call("/prototype/variants", {
+        workspace_path: workspacePath,
+        description: description.trim(),
+        prototype_type: protoType,
+        num_variants: 3,
+      })) as { status: string; variants: PrototypeData[] };
+
+      if (res.status === "ok" && res.variants?.length > 0) {
+        setVariants(res.variants);
+        setShowVariants(true);
+      }
+    } catch (err) {
+      console.error("Variant generation failed:", err);
+    } finally {
+      setGeneratingVariants(false);
+      setDescription("");
+      setProtoType("landing-page");
+    }
+  }
+
+  function handleSelectVariant(variant: PrototypeData) {
+    const saved = {
+      ...variant,
+      id: `proto-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    save(saved);
+    setActive(saved);
+    setShowVariants(false);
+    setVariants([]);
   }
 
   function handleUpdate(updated: PrototypeData) {
@@ -178,6 +219,14 @@ export default function PrototypesPage() {
                 Cancel
               </button>
               <button
+                onClick={handleGenerateVariants}
+                disabled={!description.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 border border-compass-accent text-compass-accent rounded-lg text-sm font-medium hover:bg-compass-accent/10 disabled:opacity-50 transition-colors"
+              >
+                <GitBranch className="w-4 h-4" />
+                Generate Variants
+              </button>
+              <button
                 onClick={handleCreate}
                 disabled={!description.trim()}
                 className="px-4 py-2 bg-compass-accent text-white rounded-lg text-sm font-medium hover:bg-compass-accent/80 disabled:opacity-50 transition-colors"
@@ -186,6 +235,27 @@ export default function PrototypesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Variant comparison modal */}
+      {showVariants && variants.length > 0 && (
+        <VariantComparison
+          variants={variants}
+          onSelect={handleSelectVariant}
+          onClose={() => {
+            setShowVariants(false);
+            setVariants([]);
+          }}
+        />
+      )}
+
+      {generatingVariants && (
+        <div className="flex items-center gap-3 px-4 py-8 justify-center">
+          <Loader2 className="w-5 h-5 animate-spin text-compass-accent" />
+          <span className="text-sm text-compass-muted">
+            Generating variants...
+          </span>
         </div>
       )}
 
