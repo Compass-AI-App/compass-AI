@@ -1,4 +1,7 @@
 import { clsx } from "clsx";
+import BarChartComponent from "../charts/BarChart";
+import LineChartComponent from "../charts/LineChart";
+import PieChartComponent from "../charts/PieChart";
 
 interface ContentBlock {
   type: string;
@@ -50,7 +53,43 @@ function BlockRenderer({ block }: { block: ContentBlock }) {
           )}
         </blockquote>
       );
-    case "chart_spec":
+    case "chart_spec": {
+      const chartData = block.attrs?.data as Record<string, unknown>[] | undefined;
+      const chartType = (block.attrs?.type as string) || "bar";
+      const xKey = (block.attrs?.x_key as string) || "label";
+      const yKeys = (block.attrs?.y_keys as string[]) || ["value"];
+
+      if (chartData && chartData.length > 0) {
+        return (
+          <div className="bg-compass-bg/50 rounded-lg p-4 mb-4 border border-compass-border">
+            <p className="text-sm font-medium text-compass-accent mb-3">{block.content}</p>
+            {chartType === "pie" ? (
+              <PieChartComponent
+                data={chartData.map((d) => ({
+                  name: String(d[xKey] ?? ""),
+                  value: Number(d[yKeys[0]] ?? 0),
+                }))}
+                height={220}
+              />
+            ) : chartType === "line" ? (
+              <LineChartComponent
+                data={chartData}
+                xKey={xKey}
+                yKeys={yKeys}
+                height={220}
+              />
+            ) : (
+              <BarChartComponent
+                data={chartData}
+                xKey={xKey}
+                yKeys={yKeys}
+                height={220}
+              />
+            )}
+          </div>
+        );
+      }
+
       return (
         <div className="bg-compass-bg/50 rounded-lg p-6 mb-4 border border-compass-border">
           <p className="text-sm font-medium text-compass-accent mb-1">
@@ -63,6 +102,7 @@ function BlockRenderer({ block }: { block: ContentBlock }) {
           )}
         </div>
       );
+    }
     case "image_placeholder":
       return (
         <div className="bg-compass-bg/30 rounded-lg p-8 mb-4 border-2 border-dashed border-compass-border flex items-center justify-center">
