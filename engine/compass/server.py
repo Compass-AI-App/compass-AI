@@ -1120,6 +1120,32 @@ def discover_stream(req: WorkspaceRequest):
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+# ---------- Dashboard endpoints ----------
+
+
+class DashboardRequest(BaseModel):
+    workspace_path: str
+    question: str
+
+
+@app.post("/dashboard/generate")
+def dashboard_generate(req: DashboardRequest):
+    """Generate a dashboard (chart specs) from a natural language question."""
+    kg = _try_get_kg(req.workspace_path)
+    if not kg or len(kg) == 0:
+        raise HTTPException(400, "No evidence available. Ingest sources first.")
+
+    from compass.engine.dashboarder import Dashboarder
+    dashboarder = Dashboarder(kg)
+    spec = dashboarder.generate(req.question)
+
+    return {
+        "status": "ok",
+        "title": spec.title,
+        "charts": [c.model_dump() for c in spec.charts],
+    }
+
+
 # ---------- Template endpoints ----------
 
 from compass.templates import list_templates, get_template
