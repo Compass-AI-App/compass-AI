@@ -10,6 +10,8 @@
 
 import { BrowserWindow, ipcMain } from "electron";
 import crypto from "crypto";
+import http from "http";
+import type { AddressInfo } from "net";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +23,7 @@ export interface OAuthProviderConfig {
   auth_url: string;
   token_url: string;
   client_id: string;
+  client_secret?: string;
   scopes: string[];
   icon?: string;
   /** Some providers require additional params (e.g. Atlassian needs audience) */
@@ -75,6 +78,26 @@ function generateState(): string {
 
 let pendingAuth: PendingAuth | null = null;
 let authWindow: BrowserWindow | null = null;
+let loopbackServer: http.Server | null = null;
+
+/** Providers that require http://localhost redirect (no custom protocol support). */
+const LOOPBACK_PROVIDERS = new Set(["google"]);
+
+/**
+ * Start a temporary loopback HTTP server to capture the OAuth callback.
+ * Returns the redirect URI with the assigned port.
+ */
+function startLoopbackServer(): Promise<{ server: http.Server; redirectUri: string }> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const port = (server.address() as AddressInfo).port;
+      const redirectUri = `http://127.0.0.1:${port}`;
+      resolve({ server, redirectUri });
+    });
+    server.on("error", reject);
+  });
+}
 
 /**
  * Start an OAuth2 Authorization Code + PKCE flow.
@@ -82,11 +105,24 @@ let authWindow: BrowserWindow | null = null;
  * Opens a BrowserWindow to the provider's auth URL. The user authenticates
  * in that window. On redirect, the code is exchanged for tokens.
  *
+ * For providers that require loopback redirects (e.g. Google), a temporary
+ * local HTTP server captures the callback. Others use the custom protocol.
+ *
  * Returns the tokens on success, throws on failure or cancellation.
  */
-export function startOAuthFlow(
+export async function startOAuthFlow(
   provider: OAuthProviderConfig
 ): Promise<OAuthResult> {
+  const useLoopback = LOOPBACK_PROVIDERS.has(provider.id);
+  let redirectUri = "compass://oauth/callback";
+  let loopback: { server: http.Server; redirectUri: string } | null = null;
+
+  if (useLoopback) {
+    loopback = await startLoopbackServer();
+    redirectUri = loopback.redirectUri;
+    loopbackServer = loopback.server;
+  }
+
   return new Promise((resolve, reject) => {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -98,7 +134,7 @@ export function startOAuthFlow(
     const params = new URLSearchParams({
       response_type: "code",
       client_id: provider.client_id,
-      redirect_uri: "compass://oauth/callback",
+      redirect_uri: redirectUri,
       scope: provider.scopes.join(" "),
       state,
       code_challenge: codeChallenge,
@@ -107,6 +143,64 @@ export function startOAuthFlow(
     });
 
     const authUrl = `${provider.auth_url}?${params.toString()}`;
+
+    // Set up loopback server request handler
+    if (loopback) {
+      loopback.server.on("request", async (req, res) => {
+        const reqUrl = new URL(req.url || "/", redirectUri);
+        const code = reqUrl.searchParams.get("code");
+        const cbState = reqUrl.searchParams.get("state");
+        const error = reqUrl.searchParams.get("error");
+
+        // Send a nice response to the browser
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(
+          "<html><body style=\"font-family:system-ui;text-align:center;padding:60px;background:#1a1a2e;color:#fff\">" +
+          "<h2>Connected!</h2><p>You can close this window and return to Compass.</p>" +
+          "<script>window.close()</script></body></html>"
+        );
+
+        // Clean up server
+        loopback!.server.close();
+        loopbackServer = null;
+
+        if (!pendingAuth) return;
+
+        const { provider: p, codeVerifier: cv, state: expected, resolve: res2, reject: rej2 } = pendingAuth;
+        pendingAuth = null;
+
+        if (authWindow) {
+          authWindow.close();
+          authWindow = null;
+        }
+
+        if (error) {
+          rej2(new Error(`OAuth error: ${error}`));
+          return;
+        }
+        if (!code) {
+          rej2(new Error("No authorization code received"));
+          return;
+        }
+        if (cbState !== expected) {
+          rej2(new Error("OAuth state mismatch — possible CSRF attack"));
+          return;
+        }
+
+        try {
+          const tokens = await exchangeCodeForTokens(p, code, cv, redirectUri);
+          res2({
+            provider: p.id,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined,
+            scopes: tokens.scope ? tokens.scope.split(" ") : p.scopes,
+          });
+        } catch (err) {
+          rej2(err instanceof Error ? err : new Error(String(err)));
+        }
+      });
+    }
 
     // Open auth window
     authWindow = new BrowserWindow({
@@ -124,6 +218,10 @@ export function startOAuthFlow(
 
     authWindow.on("closed", () => {
       authWindow = null;
+      if (loopbackServer) {
+        loopbackServer.close();
+        loopbackServer = null;
+      }
       if (pendingAuth) {
         const p = pendingAuth;
         pendingAuth = null;
@@ -178,7 +276,7 @@ export async function handleOAuthCallback(
 
   // Exchange code for tokens
   try {
-    const tokens = await exchangeCodeForTokens(provider, code, codeVerifier);
+    const tokens = await exchangeCodeForTokens(provider, code, codeVerifier, "compass://oauth/callback");
     const result: OAuthResult = {
       provider: provider.id,
       access_token: tokens.access_token,
@@ -202,15 +300,20 @@ export async function handleOAuthCallback(
 async function exchangeCodeForTokens(
   provider: OAuthProviderConfig,
   code: string,
-  codeVerifier: string
+  codeVerifier: string,
+  redirectUri: string
 ): Promise<TokenResponse> {
-  const body = new URLSearchParams({
+  const params: Record<string, string> = {
     grant_type: "authorization_code",
     client_id: provider.client_id,
     code,
-    redirect_uri: "compass://oauth/callback",
+    redirect_uri: redirectUri,
     code_verifier: codeVerifier,
-  });
+  };
+  if (provider.client_secret) {
+    params.client_secret = provider.client_secret;
+  }
+  const body = new URLSearchParams(params);
 
   const res = await fetch(provider.token_url, {
     method: "POST",
@@ -238,11 +341,15 @@ export async function refreshAccessToken(
   provider: OAuthProviderConfig,
   refreshToken: string
 ): Promise<TokenResponse> {
-  const body = new URLSearchParams({
+  const refreshParams: Record<string, string> = {
     grant_type: "refresh_token",
     client_id: provider.client_id,
     refresh_token: refreshToken,
-  });
+  };
+  if (provider.client_secret) {
+    refreshParams.client_secret = provider.client_secret;
+  }
+  const body = new URLSearchParams(refreshParams);
 
   const res = await fetch(provider.token_url, {
     method: "POST",

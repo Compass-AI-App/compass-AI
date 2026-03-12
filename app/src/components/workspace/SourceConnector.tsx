@@ -35,6 +35,7 @@ const SOURCE_DEFS: SourceDef[] = [
     bgColor: "bg-compass-docs/10",
     description: "Strategy docs, PRDs, roadmaps",
     picker: "directory",
+    supportsLive: true,
   },
   {
     type: "analytics",
