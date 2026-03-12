@@ -1087,6 +1087,60 @@ def discover_stream(req: WorkspaceRequest):
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+# ---------- Template endpoints ----------
+
+from compass.templates import list_templates, get_template
+
+
+@app.get("/templates")
+def templates_list():
+    """List all available project templates."""
+    return {"templates": list_templates()}
+
+
+class TemplateInitRequest(BaseModel):
+    workspace_path: str
+    template_id: str
+    product_name: str
+    product_description: str = ""
+
+
+@app.post("/templates/init")
+def templates_init(req: TemplateInitRequest):
+    """Initialize a workspace from a template."""
+    template = get_template(req.template_id)
+    if not template:
+        raise HTTPException(400, f"Unknown template: {req.template_id}")
+
+    base = Path(req.workspace_path)
+    base.mkdir(parents=True, exist_ok=True)
+
+    # Build config from template
+    sources = []
+    for src in template.starter_config.get("sources", []):
+        sources.append(SourceConfig(
+            type=src["type"],
+            name=src["name"],
+            path=src.get("path"),
+        ))
+
+    config = ProductConfig(
+        product_name=req.product_name,
+        description=req.product_description,
+        sources=sources,
+    )
+    save_config(config, base)
+
+    return {
+        "status": "ok",
+        "template": template.id,
+        "product_name": req.product_name,
+        "sources": [s.name for s in sources],
+        "example_questions": template.example_questions,
+        "default_chat_mode": template.default_chat_mode,
+    }
+
+
 # ---------- Sync endpoints ----------
 
 from compass.sync import scheduler
