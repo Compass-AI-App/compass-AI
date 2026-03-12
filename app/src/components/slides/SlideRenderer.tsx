@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import SlideLayout from "./SlideLayouts";
 import SlideNavigation from "./SlideNavigation";
 import SlideExport from "./SlideExport";
+import PresenterView from "./PresenterView";
 import type { ContentBlock } from "./SlideLayouts";
 
 interface SlideData {
@@ -80,42 +81,11 @@ export default function SlideRenderer({ presentation }: SlideRendererProps) {
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 bg-compass-bg z-50 flex flex-col">
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-5xl">
-            <SlideLayout
-              title={slide.title}
-              layout={slide.layout}
-              blocks={slide.content_blocks}
-              isPresenting
-            />
-          </div>
-        </div>
-        <div className="shrink-0 bg-compass-card/80 border-t border-compass-border">
-          <div className="flex items-center justify-between px-4">
-            <SlideNavigation
-              currentSlide={currentSlide}
-              totalSlides={totalSlides}
-              onPrev={goPrev}
-              onNext={goNext}
-              onGoTo={goTo}
-            />
-            <button
-              onClick={() => setIsFullscreen(false)}
-              className="p-2 text-compass-muted hover:text-compass-text transition-colors"
-            >
-              <Minimize2 className="w-4 h-4" />
-            </button>
-          </div>
-          {slide.speaker_notes && (
-            <div className="px-6 pb-3">
-              <p className="text-xs text-compass-muted/70 italic">
-                {slide.speaker_notes}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      <PresenterView
+        presentation={presentation}
+        startSlide={currentSlide}
+        onExit={() => setIsFullscreen(false)}
+      />
     );
   }
 
