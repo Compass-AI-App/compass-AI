@@ -7,7 +7,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import EditorToolbar from "./EditorToolbar";
 
 interface DocumentEditorProps {
-  content?: string;
+  content?: string | Record<string, unknown>;
   onChange?: (json: Record<string, unknown>, markdown: string) => void;
   placeholder?: string;
   editable?: boolean;
