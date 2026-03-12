@@ -183,6 +183,35 @@ ipcMain.handle(
   },
 );
 
+// IPC: Capture HTML as PNG screenshot
+ipcMain.handle(
+  "capture-html-png",
+  async (_event, html: string, defaultName: string) => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: [{ name: "PNG Image", extensions: ["png"] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+
+    const captureWin = new BrowserWindow({
+      show: false,
+      width: 1280,
+      height: 800,
+      webPreferences: { offscreen: true },
+    });
+    await captureWin.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+    );
+    // Wait for content to render
+    await new Promise((r) => setTimeout(r, 1000));
+    const image = await captureWin.webContents.capturePage();
+    const fsPromises = await import("fs/promises");
+    await fsPromises.writeFile(result.filePath, image.toPNG());
+    captureWin.destroy();
+    return result.filePath;
+  },
+);
+
 // IPC: Engine API call (proxied through main process via engine-bridge)
 ipcMain.handle("engine-call", async (_event, endpoint: string, body?: unknown) => {
   try {
