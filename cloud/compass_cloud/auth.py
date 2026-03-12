@@ -8,6 +8,8 @@ import json
 import time
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 
+import httpx
+
 from compass_cloud.models import User, Plan, PLAN_LIMITS
 
 # In-memory store for development. Replace with Postgres for production.
@@ -121,3 +123,106 @@ def check_token_limit(user: User) -> bool:
 def record_usage(user: User, tokens: int) -> None:
     """Record token usage for a user."""
     user.token_usage_month += tokens
+
+
+# ---- Social Auth ----
+
+# Index: provider + provider_user_id -> email
+_provider_index: dict[str, str] = {}  # "github:12345" -> email
+
+
+async def _fetch_github_profile(access_token: str) -> dict:
+    """Fetch GitHub user profile using an access token."""
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        res.raise_for_status()
+        data = res.json()
+        email = data.get("email") or ""
+        if not email:
+            email_res = await client.get(
+                "https://api.github.com/user/emails",
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            )
+            if email_res.status_code == 200:
+                emails = email_res.json()
+                primary = next((e for e in emails if e.get("primary")), None)
+                email = (primary or emails[0])["email"] if emails else ""
+        return {
+            "id": str(data["id"]),
+            "name": data.get("name") or data.get("login", ""),
+            "email": email,
+            "avatar_url": data.get("avatar_url", ""),
+        }
+
+
+async def _fetch_google_profile(access_token: str) -> dict:
+    """Fetch Google user profile using an access token."""
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        res.raise_for_status()
+        data = res.json()
+        return {
+            "id": data.get("id", ""),
+            "name": data.get("name", ""),
+            "email": data.get("email", ""),
+            "avatar_url": data.get("picture", ""),
+        }
+
+
+async def oauth_login(provider: str, access_token: str) -> tuple[User, str]:
+    """Authenticate via social provider. Creates account if new. Returns (user, jwt)."""
+    if provider == "github":
+        profile = await _fetch_github_profile(access_token)
+    elif provider == "google":
+        profile = await _fetch_google_profile(access_token)
+    else:
+        raise ValueError(f"Unsupported OAuth provider: {provider}")
+
+    if not profile.get("email"):
+        raise ValueError(f"Could not retrieve email from {provider}")
+
+    provider_key = f"{provider}:{profile['id']}"
+    email = profile["email"]
+
+    # Check if we already have this provider user
+    existing_email = _provider_index.get(provider_key)
+    if existing_email and existing_email in _users:
+        user = _users[existing_email]
+        # Update profile fields
+        user.name = profile.get("name", user.name)
+        user.avatar_url = profile.get("avatar_url", user.avatar_url)
+        token = _create_jwt(user.id, user.email)
+        _tokens[token] = user.email
+        return user, token
+
+    # Check if email already registered (link account)
+    if email in _users:
+        user = _users[email]
+        user.auth_provider = provider
+        user.provider_user_id = profile["id"]
+        user.name = profile.get("name", user.name)
+        user.avatar_url = profile.get("avatar_url", user.avatar_url)
+        _provider_index[provider_key] = email
+        token = _create_jwt(user.id, email)
+        _tokens[token] = email
+        return user, token
+
+    # Create new user
+    user = User(
+        email=email,
+        auth_provider=provider,
+        provider_user_id=profile["id"],
+        name=profile.get("name", ""),
+        avatar_url=profile.get("avatar_url", ""),
+    )
+    _users[email] = user
+    _provider_index[provider_key] = email
+    token = _create_jwt(user.id, email)
+    _tokens[token] = email
+    return user, token

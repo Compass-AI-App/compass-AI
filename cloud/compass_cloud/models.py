@@ -30,12 +30,17 @@ PLAN_PRICES = {
 class User(BaseModel):
     id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex[:12])
     email: str
-    password_hash: str
+    password_hash: str = ""
     plan: Plan = Plan.FREE
     stripe_customer_id: str = ""
     created_at: datetime = Field(default_factory=datetime.now)
     token_usage_month: int = 0
     token_usage_reset: datetime = Field(default_factory=datetime.now)
+    # Social auth fields
+    auth_provider: str = ""  # "github", "google", or "" for email/password
+    provider_user_id: str = ""
+    name: str = ""
+    avatar_url: str = ""
 
 
 class TokenUsage(BaseModel):
@@ -47,6 +52,12 @@ class TokenUsage(BaseModel):
 class AuthRequest(BaseModel):
     email: str
     password: str
+
+
+class OAuthRequest(BaseModel):
+    """Request for social auth — exchange provider token for Cloud token."""
+    provider: str  # "github" or "google"
+    access_token: str
 
 
 class AuthResponse(BaseModel):
