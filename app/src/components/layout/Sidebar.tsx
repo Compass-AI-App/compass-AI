@@ -24,6 +24,7 @@ import { useWorkspaceManager } from "../../stores/workspaceManager";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "../../stores/chat";
 import { useAuthStore } from "../../stores/auth";
+import NotificationBell from "./NotificationBell";
 
 const navItems = [
   { to: "/workspace", icon: Home, label: "Workspace" },
@@ -236,6 +237,9 @@ export default function Sidebar() {
           </div>
         )}
 
+        <div className="flex items-center gap-1 px-1 mb-1">
+          <NotificationBell />
+        </div>
         <NavLink
           to="/settings"
           className={({ isActive }) =>
