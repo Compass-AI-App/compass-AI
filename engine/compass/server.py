@@ -1315,6 +1315,29 @@ def prototype_iterate(req: PrototypeIterateRequest):
     }
 
 
+@app.get("/prototype/components")
+def prototype_components_list():
+    """List available prototype component snippets."""
+    from compass.prototype_components import list_components
+    return {"components": list_components()}
+
+
+@app.get("/prototype/components/{component_id}")
+def prototype_component_get(component_id: str):
+    """Get a specific component snippet by ID."""
+    from compass.prototype_components import get_component
+    comp = get_component(component_id)
+    if not comp:
+        raise HTTPException(404, f"Component not found: {component_id}")
+    return {
+        "id": comp.id,
+        "name": comp.name,
+        "category": comp.category,
+        "description": comp.description,
+        "html": comp.html,
+    }
+
+
 # ---------- Template endpoints ----------
 
 from compass.templates import list_templates, get_template
