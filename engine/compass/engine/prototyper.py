@@ -179,6 +179,74 @@ class Prototyper:
 
         return prototype
 
+    def generate_variants(
+        self,
+        description: str,
+        prototype_type: str = "landing-page",
+        num_variants: int = 3,
+        evidence_ids: list[str] | None = None,
+    ) -> list[Prototype]:
+        """Generate multiple variant prototypes for A/B comparison.
+
+        Args:
+            description: What the prototype should show.
+            prototype_type: Type of prototype to generate.
+            num_variants: Number of variants (2-3).
+            evidence_ids: Specific evidence IDs to use (optional).
+
+        Returns:
+            List of Prototype variants with distinct design approaches.
+        """
+        num_variants = max(2, min(num_variants, 3))
+
+        if prototype_type not in VALID_TYPES:
+            prototype_type = "landing-page"
+
+        # Gather evidence once
+        if evidence_ids:
+            evidence = [self.kg.get_by_id(eid) for eid in evidence_ids]
+            evidence = [e for e in evidence if e is not None]
+        else:
+            evidence = self.kg.query(description, n_results=20)
+
+        evidence_ids_used = [e.id for e in evidence]
+
+        prompts = get_prompts("prototype", self.prompt_version)
+
+        evidence_context = _format_evidence(evidence)
+        content_signals = _extract_content_signals(evidence)
+        if content_signals:
+            evidence_context += "\n\n--- Extracted content for realistic prototype ---\n" + content_signals
+
+        variant_styles = [
+            "Variant A: Clean and minimal — generous whitespace, muted colors, subtle typography. Focus on simplicity.",
+            "Variant B: Bold and vibrant — strong colors, large typography, prominent CTAs. Focus on energy and conversion.",
+            "Variant C: Professional and data-rich — structured layout, detailed information, trust signals. Focus on credibility.",
+        ]
+
+        variants = []
+        for i in range(num_variants):
+            variant_prompt = prompts["prompt"].format(
+                description=f"{description}\n\nDesign direction: {variant_styles[i]}",
+                prototype_type=prototype_type,
+                evidence_context=evidence_context,
+            )
+
+            raw_html = ask(variant_prompt, system=prompts["system"], model=self.model, max_tokens=16384)
+            html = _clean_html(raw_html)
+            title = self._extract_title(html, f"{description} — Variant {chr(65 + i)}")
+
+            variants.append(Prototype(
+                title=title,
+                type=prototype_type,
+                html=html,
+                description=f"{description} (Variant {chr(65 + i)})",
+                iterations=[PrototypeIteration(prompt=description, html=html)],
+                evidence_ids=evidence_ids_used,
+            ))
+
+        return variants
+
     def _extract_title(self, html: str, fallback: str) -> str:
         """Extract title from HTML <title> tag or use fallback."""
         match = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE)
