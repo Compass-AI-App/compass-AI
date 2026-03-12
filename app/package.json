@@ -14,15 +14,16 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.0.0",
-    "zustand": "^5.0.0",
-    "react-markdown": "^9.0.0",
-    "lucide-react": "^0.460.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.3.0",
+    "lucide-react": "^0.460.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.0",
+    "react-router-dom": "^7.0.0",
+    "recharts": "^3.8.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
@@ -75,7 +76,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ],
       "icon": "build/icon.icns",
@@ -89,7 +92,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico"
@@ -103,7 +108,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icons",
@@ -111,8 +118,16 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "publish": {
