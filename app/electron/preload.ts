@@ -25,6 +25,11 @@ contextBridge.exposeInMainWorld("compass", {
       ipcRenderer.invoke("select-file", filters),
     saveFile: (defaultName: string, content: string) =>
       ipcRenderer.invoke("save-file", defaultName, content),
+    exportDocument: (
+      defaultName: string,
+      content: string,
+      format: "md" | "html" | "pdf" | "docx",
+    ) => ipcRenderer.invoke("export-document", defaultName, content, format),
   },
   secrets: {
     store: (key: string, value: string) =>

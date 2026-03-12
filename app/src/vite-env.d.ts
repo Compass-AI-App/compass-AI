@@ -13,6 +13,11 @@ interface CompassApp {
   selectDirectory: () => Promise<string | null>;
   selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<string | null>;
   saveFile: (defaultName: string, content: string) => Promise<string | null>;
+  exportDocument: (
+    defaultName: string,
+    content: string,
+    format: "md" | "html" | "pdf" | "docx",
+  ) => Promise<string | null>;
 }
 
 interface CompassSecrets {
