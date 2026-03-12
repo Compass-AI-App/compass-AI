@@ -312,6 +312,11 @@ def ingest(req: WorkspaceRequest):
             results.append({"name": source.name, "type": source.type, "items": 0, "error": str(e)})
 
     summary = _kg.store.summary
+
+    from compass import activity as act
+    act.record(req.workspace_path, "ingest", f"Ingested {total} evidence items",
+               metadata={"total": total, "sources": len(results)})
+
     return {"status": "ok", "total": total, "sources": results, "summary": summary}
 
 
@@ -482,6 +487,10 @@ def discover(req: WorkspaceRequest):
     compass_dir = get_compass_dir(base)
     cache = [opp.model_dump() for opp in opportunities]
     (compass_dir / "opportunities_cache.json").write_text(json.dumps(cache, indent=2, default=str))
+
+    from compass import activity as act
+    act.record(req.workspace_path, "discover", f"Discovered {len(result)} opportunities",
+               metadata={"count": len(result)})
 
     return {"status": "ok", "count": len(result), "opportunities": result}
 
@@ -1243,6 +1252,10 @@ def presentation_generate(req: PresentationRequest):
         evidence_ids=req.evidence_ids or None,
     )
 
+    from compass import activity as act
+    act.record(req.workspace_path, "presentation", f"Generated presentation: {req.topic}",
+               metadata={"slides": len(presentation.slides), "audience": req.audience})
+
     return {
         "status": "ok",
         "presentation": presentation.model_dump(),
@@ -1470,6 +1483,30 @@ def sync_status(req: SyncStatusRequest):
     if isinstance(result, list):
         return {"sources": result}
     return result
+
+
+# ---------- Activity endpoints ----------
+
+from compass import activity
+
+
+class ActivityRequest(BaseModel):
+    workspace_path: str
+    limit: int = 50
+    event_type: str | None = None
+
+
+@app.post("/activity")
+def activity_list(req: ActivityRequest):
+    """Get recent activity events for a workspace."""
+    events = activity.get_events(
+        req.workspace_path,
+        limit=req.limit,
+        event_type=req.event_type,
+    )
+    return {
+        "events": [e.model_dump() for e in events],
+    }
 
 
 # ---------- Helpers ----------
