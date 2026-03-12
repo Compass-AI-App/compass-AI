@@ -1214,6 +1214,41 @@ def dashboard_generate(req: DashboardRequest):
     }
 
 
+# ---------- Presentation endpoints ----------
+
+
+class PresentationRequest(BaseModel):
+    workspace_path: str
+    topic: str
+    description: str = ""
+    audience: str = "cross-functional"
+    slide_count: int = 8
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+@app.post("/presentation/generate")
+def presentation_generate(req: PresentationRequest):
+    """Generate a structured slide deck from evidence."""
+    kg = _try_get_kg(req.workspace_path)
+    if not kg or len(kg) == 0:
+        raise HTTPException(400, "No evidence available. Ingest sources first.")
+
+    from compass.engine.presenter import Presenter
+    presenter = Presenter(kg)
+    presentation = presenter.generate(
+        topic=req.topic,
+        description=req.description,
+        audience=req.audience,
+        slide_count=req.slide_count,
+        evidence_ids=req.evidence_ids or None,
+    )
+
+    return {
+        "status": "ok",
+        "presentation": presentation.model_dump(),
+    }
+
+
 # ---------- Template endpoints ----------
 
 from compass.templates import list_templates, get_template
