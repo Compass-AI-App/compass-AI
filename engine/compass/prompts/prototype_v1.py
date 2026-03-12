@@ -8,7 +8,11 @@ Rules:
 1. Output ONLY the raw HTML — no markdown fences, no explanation.
 2. Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
 3. Make the page fully responsive (mobile-first).
-4. Use realistic content from the evidence when available — real product names, metrics, quotes.
+4. ALWAYS use realistic content from the evidence — never use "Lorem ipsum" or generic placeholder text.
+   - Use real product/feature names from the evidence context.
+   - Use real metrics and numbers (revenue, user counts, percentages) from the evidence.
+   - Use real user quotes as testimonials or social proof.
+   - If the evidence provides specific data, embed it directly in the prototype.
 5. Include hover states, transitions, and micro-interactions via Tailwind classes.
 6. The HTML must be completely self-contained — no external assets except Tailwind CDN.
 7. Use modern design patterns: clean typography, generous whitespace, subtle shadows.
