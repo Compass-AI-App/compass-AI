@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld("compass", {
       content: string,
       format: "md" | "html" | "pdf" | "docx",
     ) => ipcRenderer.invoke("export-document", defaultName, content, format),
+    captureHtmlPng: (html: string, defaultName: string) =>
+      ipcRenderer.invoke("capture-html-png", html, defaultName),
   },
   secrets: {
     store: (key: string, value: string) =>

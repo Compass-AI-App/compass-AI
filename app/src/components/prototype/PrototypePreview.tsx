@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import ViewportToggle, { getViewportWidth } from "./ViewportToggle";
 import IterationPanel from "./IterationPanel";
+import PrototypeExport from "./PrototypeExport";
 import type { Viewport } from "./ViewportToggle";
 
 interface Iteration {
@@ -94,6 +95,7 @@ export default function PrototypePreview({
         </div>
         <div className="flex items-center gap-2">
           <ViewportToggle viewport={viewport} onChange={setViewport} />
+          <PrototypeExport html={currentHtml} title={prototype.title} />
           <button
             onClick={handleRefresh}
             className="p-1.5 text-compass-muted hover:text-compass-text transition-colors"

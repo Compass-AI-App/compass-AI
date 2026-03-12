@@ -18,6 +18,7 @@ interface CompassApp {
     content: string,
     format: "md" | "html" | "pdf" | "docx",
   ) => Promise<string | null>;
+  captureHtmlPng: (html: string, defaultName: string) => Promise<string | null>;
 }
 
 interface CompassSecrets {
