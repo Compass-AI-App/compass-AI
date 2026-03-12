@@ -1,36 +1,194 @@
 """Linear connector — part of the JUDGMENT source of truth.
 
-Ingests: Linear issues from JSON export files.
+Ingests: Linear issues from GraphQL API or JSON export files.
 Answers: "What is the team PLANNING and TRACKING?"
 
-Supports:
-- Linear JSON export (from Linear's export feature)
-- Directory of JSON files
+Dual-mode:
+  - Live API: Linear GraphQL API (issues, projects, cycles)
+  - File import: Linear JSON export files (fallback)
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-from compass.connectors.base import Connector
+from compass.connectors.live_base import LiveConnector
 from compass.models.sources import Evidence, SourceType
+
+logger = logging.getLogger(__name__)
 
 MAX_ISSUES = 500
 
+LINEAR_API = "https://api.linear.app/graphql"
 
-class LinearConnector(Connector):
-    """Ingests Linear issues from JSON export files."""
+ISSUES_QUERY = """
+query($first: Int!, $after: String) {
+  issues(first: $first, after: $after, orderBy: updatedAt) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      identifier
+      title
+      description
+      state { name }
+      priorityLabel
+      labels { nodes { name } }
+      assignee { name }
+      creator { name }
+      createdAt
+      updatedAt
+      comments(first: 5) { nodes { body user { name } } }
+    }
+  }
+}
+"""
+
+PROJECTS_QUERY = """
+query {
+  projects(first: 20, orderBy: updatedAt) {
+    nodes {
+      name
+      description
+      state
+      progress
+      startDate
+      targetDate
+      lead { name }
+    }
+  }
+}
+"""
+
+CYCLES_QUERY = """
+query {
+  cycles(first: 5, orderBy: endsAt) {
+    nodes {
+      number
+      name
+      startsAt
+      endsAt
+      progress
+      completedScopeCount
+      scopeCount
+    }
+  }
+}
+"""
+
+
+class LinearConnector(LiveConnector):
+    """Ingests Linear issues from API or JSON export files."""
 
     connector_type = "linear"
+    provider_id = "linear"
+    rate_limit_rpm = 60
 
     def validate(self) -> bool:
         path = self.config.path
-        if not path:
-            return False
-        return Path(path).expanduser().exists()
+        if path and Path(path).expanduser().exists():
+            return True
+        if self.has_credentials():
+            return True
+        return False
 
-    def ingest(self) -> list[Evidence]:
+    # ------------------------------------------------------------------
+    # Live API ingestion (GraphQL)
+    # ------------------------------------------------------------------
+
+    def ingest_live(self) -> list[Evidence]:
+        """Fetch issues, projects, cycles from Linear GraphQL API."""
+        evidence: list[Evidence] = []
+
+        # Fetch issues (paginated)
+        all_issues: list[dict] = []
+        cursor = None
+        while len(all_issues) < MAX_ISSUES:
+            try:
+                variables: dict = {"first": 50}
+                if cursor:
+                    variables["after"] = cursor
+                res = self._api_post(
+                    LINEAR_API,
+                    json={"query": ISSUES_QUERY, "variables": variables},
+                )
+                data = res.json()
+                issues_data = data.get("data", {}).get("issues", {})
+                nodes = issues_data.get("nodes", [])
+                if not nodes:
+                    break
+                all_issues.extend(nodes)
+                page_info = issues_data.get("pageInfo", {})
+                if not page_info.get("hasNextPage"):
+                    break
+                cursor = page_info.get("endCursor")
+            except Exception as e:
+                logger.warning("Failed to fetch Linear issues: %s", e)
+                break
+
+        if all_issues:
+            normalized = [self._normalize(issue) for issue in all_issues]
+            evidence.extend(self._issues_to_evidence(normalized, "Linear API"))
+
+        # Fetch projects
+        try:
+            res = self._api_post(LINEAR_API, json={"query": PROJECTS_QUERY})
+            data = res.json()
+            projects = data.get("data", {}).get("projects", {}).get("nodes", [])
+            if projects:
+                lines = []
+                for p in projects:
+                    lead = p.get("lead", {})
+                    lead_name = lead.get("name", "") if isinstance(lead, dict) else ""
+                    progress = p.get("progress", 0)
+                    lines.append(
+                        f"- **{p.get('name', '')}** ({p.get('state', '')}, "
+                        f"{progress:.0%}) — {p.get('description', '')[:200]}"
+                        + (f" [Lead: {lead_name}]" if lead_name else "")
+                    )
+                evidence.append(Evidence(
+                    source_type=SourceType.JUDGMENT,
+                    connector="linear",
+                    title=f"Linear projects ({len(projects)} active)",
+                    content="Active Linear projects:\n\n" + "\n".join(lines),
+                    metadata={"type": "linear_projects", "source": "api"},
+                ))
+        except Exception as e:
+            logger.debug("Failed to fetch Linear projects: %s", e)
+
+        # Fetch cycles
+        try:
+            res = self._api_post(LINEAR_API, json={"query": CYCLES_QUERY})
+            data = res.json()
+            cycles = data.get("data", {}).get("cycles", {}).get("nodes", [])
+            if cycles:
+                lines = []
+                for c in cycles:
+                    scope = c.get("scopeCount", 0)
+                    completed = c.get("completedScopeCount", 0)
+                    name = c.get("name") or f"Cycle {c.get('number', '?')}"
+                    lines.append(
+                        f"- **{name}**: {completed}/{scope} complete "
+                        f"({c.get('startsAt', '')[:10]} → {c.get('endsAt', '')[:10]})"
+                    )
+                evidence.append(Evidence(
+                    source_type=SourceType.JUDGMENT,
+                    connector="linear",
+                    title=f"Linear cycles ({len(cycles)} recent)",
+                    content="Recent Linear cycles:\n\n" + "\n".join(lines),
+                    metadata={"type": "linear_cycles", "source": "api"},
+                ))
+        except Exception as e:
+            logger.debug("Failed to fetch Linear cycles: %s", e)
+
+        logger.info("Linear live: fetched %d evidence items", len(evidence))
+        return evidence
+
+    # ------------------------------------------------------------------
+    # File-based ingestion (original behavior)
+    # ------------------------------------------------------------------
+
+    def ingest_file(self) -> list[Evidence]:
         path = self.config.path
         if not path:
             return []
@@ -56,9 +214,22 @@ class LinearConnector(Connector):
         if not issues:
             return []
 
-        evidence: list[Evidence] = []
+        return self._issues_to_evidence(issues, fpath.stem, {"file": str(fpath)})
 
-        # Summary evidence
+    # ------------------------------------------------------------------
+    # Shared evidence building
+    # ------------------------------------------------------------------
+
+    def _issues_to_evidence(
+        self,
+        issues: list[dict],
+        source_label: str,
+        extra_meta: dict | None = None,
+    ) -> list[Evidence]:
+        evidence: list[Evidence] = []
+        meta = extra_meta or {}
+
+        # Summary
         summary_lines = []
         for issue in issues[:MAX_ISSUES]:
             identifier = issue.get("identifier", "")
@@ -73,19 +244,15 @@ class LinearConnector(Connector):
         evidence.append(Evidence(
             source_type=SourceType.JUDGMENT,
             connector="linear",
-            title=f"Linear issues: {fpath.stem} ({len(issues)} issues)",
+            title=f"Linear issues: {source_label} ({len(issues)} issues)",
             content=(
-                f"Linear issues from {fpath.name}: {len(issues)} total\n\n"
+                f"Linear issues from {source_label}: {len(issues)} total\n\n"
                 + "\n".join(summary_lines)
             ),
-            metadata={
-                "file": str(fpath),
-                "type": "linear_export",
-                "issue_count": len(issues),
-            },
+            metadata={"type": "linear_export", "issue_count": len(issues), **meta},
         ))
 
-        # Per-issue evidence for issues with descriptions
+        # Per-issue
         for issue in issues[:MAX_ISSUES]:
             description = issue.get("description", "")
             if not description or len(description) < 50:
@@ -124,10 +291,11 @@ class LinearConnector(Connector):
                     "identifier": identifier,
                     "state": state,
                     "priority": priority_label,
+                    **meta,
                 },
             ))
 
-        # State distribution
+        # Distribution
         state_counts: dict[str, int] = {}
         for issue in issues:
             s = issue.get("state", "unknown")
@@ -142,10 +310,14 @@ class LinearConnector(Connector):
             connector="linear",
             title=f"Linear distribution: {len(issues)} issues across {len(state_counts)} states",
             content="\n".join(dist_lines),
-            metadata={"type": "linear_distribution"},
+            metadata={"type": "linear_distribution", **meta},
         ))
 
         return evidence
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
     def _extract_issues(self, data: object) -> list[dict]:
         """Extract issue dicts from various Linear export formats."""
@@ -153,7 +325,6 @@ class LinearConnector(Connector):
             return [self._normalize(item) for item in data if isinstance(item, dict)]
 
         if isinstance(data, dict):
-            # Linear export: {"issues": [...]} or {"data": {"issues": {"nodes": [...]}}}
             if "issues" in data:
                 issues_data = data["issues"]
                 if isinstance(issues_data, list):
@@ -164,7 +335,6 @@ class LinearConnector(Connector):
             if "data" in data and isinstance(data["data"], dict):
                 return self._extract_issues(data["data"])
 
-            # Single issue
             if "title" in data:
                 return [self._normalize(data)]
 
