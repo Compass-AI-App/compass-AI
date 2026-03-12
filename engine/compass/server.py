@@ -1120,6 +1120,74 @@ def discover_stream(req: WorkspaceRequest):
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+# ---------- Document CRUD endpoints ----------
+
+from compass.documents import create_document, get_document, list_documents, delete_document, save_document
+from compass.models.documents import StoredDocument
+
+
+class DocumentSaveRequest(BaseModel):
+    workspace_path: str
+    id: str | None = None
+    title: str
+    doc_type: str = "custom"
+    content_json: dict = Field(default_factory=dict)
+    content_markdown: str = ""
+    tags: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+@app.post("/documents/save")
+def documents_save(req: DocumentSaveRequest):
+    """Create or update a document."""
+    base = Path(req.workspace_path)
+    if req.id:
+        existing = get_document(base, req.id)
+        if existing:
+            existing.title = req.title
+            existing.doc_type = req.doc_type
+            existing.content_json = req.content_json
+            existing.content_markdown = req.content_markdown
+            existing.tags = req.tags
+            existing.evidence_ids = req.evidence_ids
+            doc = save_document(base, existing)
+        else:
+            doc = create_document(base, req.title, req.doc_type, req.content_json, req.content_markdown, req.tags, req.evidence_ids)
+    else:
+        doc = create_document(base, req.title, req.doc_type, req.content_json, req.content_markdown, req.tags, req.evidence_ids)
+    return {"status": "ok", "document": doc.model_dump()}
+
+
+@app.post("/documents/list")
+def documents_list(req: WorkspaceRequest):
+    """List all documents."""
+    docs = list_documents(Path(req.workspace_path))
+    return {"status": "ok", "documents": [d.model_dump() for d in docs]}
+
+
+class DocumentGetRequest(BaseModel):
+    workspace_path: str
+    id: str
+
+
+@app.post("/documents/get")
+def documents_get(req: DocumentGetRequest):
+    """Get a document by ID."""
+    doc = get_document(Path(req.workspace_path), req.id)
+    if not doc:
+        raise HTTPException(404, f"Document {req.id} not found")
+    return {"status": "ok", "document": doc.model_dump()}
+
+
+@app.post("/documents/delete")
+def documents_delete(req: DocumentGetRequest):
+    """Delete a document."""
+    deleted = delete_document(Path(req.workspace_path), req.id)
+    if not deleted:
+        raise HTTPException(404, f"Document {req.id} not found")
+    return {"status": "ok"}
+
+
 # ---------- Dashboard endpoints ----------
 
 
