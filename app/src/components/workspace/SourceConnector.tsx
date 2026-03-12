@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Code2, FileText, BarChart3, Mic, Headphones, Check, FolderOpen, File } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../../stores/workspace";
+import ConnectorModeToggle from "./ConnectorModeToggle";
 
 interface SourceDef {
   type: string;
@@ -11,6 +12,8 @@ interface SourceDef {
   bgColor: string;
   description: string;
   picker: "directory" | "file";
+  /** Whether this source type supports live API mode. */
+  supportsLive?: boolean;
 }
 
 const SOURCE_DEFS: SourceDef[] = [
@@ -22,6 +25,7 @@ const SOURCE_DEFS: SourceDef[] = [
     bgColor: "bg-compass-code/10",
     description: "GitHub repo or local codebase",
     picker: "directory",
+    supportsLive: true,
   },
   {
     type: "docs",
@@ -66,6 +70,7 @@ export default function SourceConnector() {
   const sources = useWorkspaceStore((s) => s.sources);
   const addSource = useWorkspaceStore((s) => s.addSource);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [modes, setModes] = useState<Record<string, "live" | "file">>({});
 
   const connectedTypes = new Set(sources.map((s) => s.type));
 
@@ -109,37 +114,51 @@ export default function SourceConnector() {
         const isConnecting = connecting === def.type;
 
         return (
-          <button
+          <div
             key={def.type}
-            onClick={() => handleConnect(def)}
-            disabled={isConnecting}
             className={clsx(
-              "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+              "p-4 rounded-xl border transition-all text-left",
               connected
                 ? "bg-compass-card border-green-500/30"
-                : "bg-compass-card border-compass-border hover:border-compass-accent/40 hover:bg-white/[0.02]"
+                : "bg-compass-card border-compass-border"
             )}
           >
-            <div className={clsx("p-2 rounded-lg", def.bgColor)}>
-              <Icon className={clsx("w-5 h-5", def.color)} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-compass-text">{def.label}</span>
-                {connected && <Check className="w-3.5 h-3.5 text-green-500" />}
+            <button
+              onClick={() => handleConnect(def)}
+              disabled={isConnecting}
+              className={clsx(
+                "flex items-center gap-3 w-full text-left",
+                !connected && "hover:opacity-80"
+              )}
+            >
+              <div className={clsx("p-2 rounded-lg", def.bgColor)}>
+                <Icon className={clsx("w-5 h-5", def.color)} />
               </div>
-              <p className="text-xs text-compass-muted truncate">{def.description}</p>
-            </div>
-            {!connected && (
-              <div className="text-compass-muted">
-                {def.picker === "directory" ? (
-                  <FolderOpen className="w-4 h-4" />
-                ) : (
-                  <File className="w-4 h-4" />
-                )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-compass-text">{def.label}</span>
+                  {connected && <Check className="w-3.5 h-3.5 text-green-500" />}
+                </div>
+                <p className="text-xs text-compass-muted truncate">{def.description}</p>
               </div>
+              {!connected && (
+                <div className="text-compass-muted">
+                  {def.picker === "directory" ? (
+                    <FolderOpen className="w-4 h-4" />
+                  ) : (
+                    <File className="w-4 h-4" />
+                  )}
+                </div>
+              )}
+            </button>
+            {connected && def.supportsLive && (
+              <ConnectorModeToggle
+                sourceType={def.type}
+                mode={modes[def.type] || "file"}
+                onModeChange={(m) => setModes((prev) => ({ ...prev, [def.type]: m }))}
+              />
             )}
-          </button>
+          </div>
         );
       })}
     </div>
