@@ -14,6 +14,7 @@ import {
   type StoredDocument,
 } from "../stores/documents";
 import DocumentEditor from "../components/editor/DocumentEditor";
+import ExportMenu from "../components/editor/ExportMenu";
 
 const DOC_TYPES = [
   { value: "brief", label: "Product Brief" },
@@ -264,6 +265,7 @@ function DocumentEditView({
           >
             {doc.doc_type}
           </span>
+          <ExportMenu title={title} markdown={contentMarkdown} />
           <button
             onClick={handleSave}
             disabled={saving || !dirty}

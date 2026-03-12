@@ -131,6 +131,58 @@ ipcMain.handle("save-file", async (_event, defaultName: string, content: string)
   return result.filePath;
 });
 
+// IPC: Export document to file
+ipcMain.handle(
+  "export-document",
+  async (
+    _event,
+    defaultName: string,
+    content: string,
+    format: "md" | "html" | "pdf" | "docx",
+  ) => {
+    const filterMap: Record<string, Electron.FileFilter[]> = {
+      md: [{ name: "Markdown", extensions: ["md"] }],
+      html: [{ name: "HTML", extensions: ["html"] }],
+      pdf: [{ name: "PDF", extensions: ["pdf"] }],
+      docx: [{ name: "Word Document", extensions: ["docx"] }],
+    };
+    const result = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: filterMap[format] || [],
+    });
+    if (result.canceled || !result.filePath) return null;
+
+    if (format === "docx") {
+      // Content is base64-encoded binary
+      const fsPromises = await import("fs/promises");
+      const buffer = Buffer.from(content, "base64");
+      await fsPromises.writeFile(result.filePath, buffer);
+    } else if (format === "pdf") {
+      // Use a hidden BrowserWindow to render HTML then printToPDF
+      const pdfWin = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 600,
+        webPreferences: { offscreen: true },
+      });
+      await pdfWin.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(content)}`,
+      );
+      const pdfData = await pdfWin.webContents.printToPDF({
+        margins: { marginType: "default" },
+        printBackground: true,
+      });
+      const fsPromises = await import("fs/promises");
+      await fsPromises.writeFile(result.filePath, pdfData);
+      pdfWin.destroy();
+    } else {
+      const fsPromises = await import("fs/promises");
+      await fsPromises.writeFile(result.filePath, content, "utf-8");
+    }
+    return result.filePath;
+  },
+);
+
 // IPC: Engine API call (proxied through main process via engine-bridge)
 ipcMain.handle("engine-call", async (_event, endpoint: string, body?: unknown) => {
   try {
