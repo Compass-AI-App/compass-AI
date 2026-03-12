@@ -201,7 +201,11 @@ def init_workspace(req: InitRequest):
     base.mkdir(parents=True, exist_ok=True)
     config = ProductConfig(name=req.name, description=req.description)
     save_config(config, base)
-    return {"status": "ok", "workspace": req.workspace_path, "name": req.name}
+
+    from compass.git_utils import init_git_repo
+    git_created = init_git_repo(base)
+
+    return {"status": "ok", "workspace": req.workspace_path, "name": req.name, "git_initialized": git_created}
 
 
 # ---------- Workspace Info ----------
@@ -1125,11 +1129,14 @@ def templates_init(req: TemplateInitRequest):
         ))
 
     config = ProductConfig(
-        product_name=req.product_name,
+        name=req.product_name,
         description=req.product_description,
         sources=sources,
     )
     save_config(config, base)
+
+    from compass.git_utils import init_git_repo
+    git_created = init_git_repo(base)
 
     return {
         "status": "ok",
@@ -1138,6 +1145,7 @@ def templates_init(req: TemplateInitRequest):
         "sources": [s.name for s in sources],
         "example_questions": template.example_questions,
         "default_chat_mode": template.default_chat_mode,
+        "git_initialized": git_created,
     }
 
 
