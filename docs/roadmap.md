@@ -30,6 +30,28 @@
 | **M6** | Connectors & Polish | Real-world connectors (Jira, Slack, Linear), onboarding wizard, feedback loop | Months 4-5 |
 | **M7** | Cloud & Revenue | Hosted version, no API key needed, Stripe billing, first revenue | Months 6-8 |
 | **M8** | Scale | Teams, connector SDK, enterprise scaffolding, historical tracking | Months 9-12 |
+| **M9** | Evidence-Grounded Writing | Writer engine: product briefs, stakeholder updates with evidence citations | Month 13 |
+| **M10** | Deep Devil's Advocate | Challenger engine: stress-test opportunities against contradicting evidence | Month 13 |
+| **M11** | Experiment Design | Experimenter engine: validation experiments grounded in data | Month 14 |
+| **M12** | Planning & Enhanced Chat | Planner engine: weekly plans, meeting prep, 8 chat modes | Month 14 |
+| **M13** | Data Analysis | Analyst engine: metric interpretation, SQL generation | Month 15 |
+| **M14** | Experiment Design (UI) | Experiment button on opportunities, experiment chat mode | Month 15 |
+| **M15** | Weekly Planning (UI) | Weekly plan widget, meeting-prep chat mode | Month 15 |
+| **M16** | Data Analysis (UI) | Analyze command, data-analyst chat mode | Month 16 |
+| **M17** | Auth Infrastructure | OAuth2 PKCE, credential vault, provider registry, connected accounts UI | Month 17 |
+| **M18** | Social Auth | Sign in with GitHub/Google, user profiles, cloud auth integration | Month 17 |
+| **M19** | Live Connectors (Core) | LiveConnector base, GitHub API, Jira Cloud API, connector mode toggle | Month 18 |
+| **M20** | Live Connectors (All) | Slack, Linear, Confluence, Notion, Zendesk live APIs, auto-sync scheduler | Month 19 |
+| **M21** | PM Onboarding | Project templates, git auto-creation, push to GitHub, guided onboarding v2 | Month 19 |
+| **M22** | Chart Engine | Recharts library, evidence dashboards, opportunity charts, conflict matrix | Month 20 |
+| **M23** | Analytics Dashboard | Dashboard engine component, dashboard page, enhanced CSV/Excel import | Month 20 |
+| **M24** | Document Editor | Tiptap rich text editor, document storage, documents page, AI generation | Month 21 |
+| **M25** | Document Sharing | Multi-format export (MD/HTML/PDF/DOCX), link sharing, evidence citations | Month 21 |
+| **M26** | Slide Builder | Presenter engine, slide renderer, presentations page, slide export | Month 22 |
+| **M27** | Slide Intelligence | Audience adaptation, speaker notes, chart embedding in slides | Month 22 |
+| **M28** | Prototype Builder | Prototyper engine, iframe preview, prototypes page, prototype export | Month 23 |
+| **M29** | Prototype Intelligence | Evidence-driven content, component library, A/B variant generation | Month 23 |
+| **M30** | Collaboration | Workspace sharing, unified export hub, activity feed, notifications | Month 24 |
 
 ---
 
@@ -1310,3 +1332,762 @@ M0-M8 (Build) → M9-M11 (Depth) → M12-M16 (Full PM Toolkit)
 | **CLI** | Power-user interface. Scripting, demos, diagnostics. | M0 onward |
 | **MCP Server** | Integration layer. Compass inside Claude Code, Cursor, and future AI tools. | M3 onward |
 | **HTTP API** | Internal bridge. Electron and MCP both call the FastAPI engine. | M0 onward |
+
+---
+
+## Phase 9: Full PM Platform (M17-M30)
+
+> Transform Compass from a discovery tool into the 1-stop-shop for PMs.
+
+### Architecture Principles
+
+1. **Engine pattern preserved.** Every new component: `Component(KG, model, prompt_version)` → query KG → `ask_json` → Pydantic model → 4 interfaces
+2. **OAuth tokens never touch engine disk.** Electron vault (safeStorage) stores credentials. Engine receives tokens at runtime via injection endpoint, holds in memory only
+3. **LiveConnector is additive.** Every connector keeps file-import mode. Live API mode activates when credentials are available
+4. **HTML-first for generated content.** Prototypes = self-contained HTML + Tailwind CDN in sandboxed iframe. Slides = styled React cards
+
+### Dependency Graph
+
+```
+M17 (Auth Infrastructure) ─────┬──→ M18 (Social Auth)
+                                ├──→ M19 (GitHub/Jira Live) → M20 (All Live Connectors)
+                                └──→ M21 (PM Onboarding)
+
+M22 (Chart Engine) → M23 (Dashboards)
+                  └──→ M27 (Charts in Slides)
+
+M24 (Document Editor) → M25 (Doc Sharing/Export)
+
+M26 (Slide Builder) → M27 (Slide Intelligence)
+
+M28 (Prototype Builder) → M29 (Prototype Intelligence)
+
+M30 (Collaboration) — depends on all above
+```
+
+---
+
+## M17: OAuth Infrastructure & Credential Vault
+
+**Objective:** Build the plumbing for OAuth tokens, API keys, and SSO credentials.
+
+### Tasks
+
+#### M17-T1: Credential Vault in Electron
+
+**Scope:**
+- Extend existing `safeStorage` system in `app/electron/main.ts`
+- Namespaced storage: `connector:{service}:{field}` pattern
+- IPC: `secrets-store-credential`, `secrets-load-credential`, `secrets-delete-credential`, `secrets-list-credentials`
+- Credentials as `{access_token, refresh_token, expires_at, scopes, provider}` JSON blobs
+- Expose via `window.compass.credentials.store/load/delete/list` in preload.ts
+
+**Files:** `app/electron/main.ts`, `app/electron/preload.ts`, `app/src/types/credentials.ts` (create)
+
+**DoD:** Store/retrieve/delete typed credential objects per service, encrypted at rest
+
+#### M17-T2: SourceConfig Auth Extension
+
+**Deps:** M17-T1
+
+**Scope:**
+- Add `auth: AuthConfig | None = None` to `SourceConfig` in `engine/compass/config.py`
+- `AuthConfig`: `{method: "oauth"|"api_key"|"pat", credential_ref: str, scopes: list[str]}`
+- `credential_ref` is a logical key (e.g. `"github"`) mapping to Electron vault
+- Add `POST /credentials/inject` endpoint so Electron passes decrypted tokens at runtime
+
+**Files:** `engine/compass/config.py`, `engine/compass/models/auth.py` (create), `engine/compass/server.py`
+
+**DoD:** SourceConfig references credentials; engine receives tokens via runtime injection
+
+#### M17-T3: OAuth2 PKCE Flow in Electron
+
+**Deps:** M17-T1
+
+**Scope:**
+- Generic OAuth2 Authorization Code + PKCE in Electron main process
+- `BrowserWindow` opens provider auth URL, captures redirect via `compass://oauth/callback` protocol
+- Register `compass://` via `app.setAsDefaultProtocolClient`
+- Token exchange in main process (not renderer). Auto-refresh when `expires_at` approaching
+
+**Files:** `app/electron/oauth.ts` (create), `app/electron/main.ts`
+
+**DoD:** Generic OAuth flow usable by any provider via `{auth_url, token_url, client_id, scopes}`
+
+#### M17-T4: OAuth Provider Registry
+
+**Deps:** M17-T3
+
+**Scope:**
+- Provider configs for: GitHub, Google, Slack, Atlassian (Jira+Confluence), Linear, Notion
+- Per provider: `{id, name, auth_url, token_url, client_id, scopes, icon}`
+- Scopes: GitHub (`repo`, `read:org`, `read:user`), Google (`drive.readonly`, `documents.readonly`), Slack (`channels:history`, `channels:read`, `search:read`, `users:read`), Atlassian (`read:jira-work`, `read:confluence-content.all`), Linear (`read`), Notion (`read_content`, `read_user`)
+
+**Files:** `app/electron/oauth-providers.ts` (create), `app/electron/oauth.ts`
+
+**DoD:** Provider registry; can initiate OAuth for any registered provider
+
+#### M17-T5: Connected Accounts Settings UI
+
+**Deps:** M17-T4
+
+**Scope:**
+- "Connected Accounts" section in SettingsPage
+- Show services with status (connected/expired/disconnected)
+- "Connect" triggers OAuth, "Disconnect" revokes + clears
+- Also support API key / PAT entry (Linear, Zendesk)
+
+**Files:** `app/src/pages/SettingsPage.tsx`, `app/src/components/settings/ConnectedAccounts.tsx` (create), `app/src/stores/credentials.ts` (create)
+
+**DoD:** User can connect/disconnect OAuth providers and enter API keys from Settings
+
+---
+
+## M18: Social Auth (Sign in with GitHub/Google)
+
+**Deps:** M17 complete
+
+### Tasks
+
+#### M18-T1: Social Auth Flow
+
+**Scope:**
+- "Sign in with GitHub" / "Sign in with Google" on LoginPage
+- Reuse M17-T3 OAuth flow. Token doubles as app auth + service credential
+- BYOK users who skip login remain anonymous locally — social auth is optional
+
+**Files:** `app/src/pages/LoginPage.tsx`, `app/electron/oauth.ts`
+
+**DoD:** Users can sign in with GitHub or Google
+
+#### M18-T2: User Profile Store
+
+**Deps:** M18-T1
+
+**Scope:**
+- Fetch profile (name, email, avatar) from provider API after auth
+- Zustand store, display avatar + name in sidebar bottom
+- Persist: localStorage (non-sensitive) + keychain (tokens)
+
+**Files:** `app/src/stores/auth.ts` (create), `app/src/components/layout/Sidebar.tsx`
+
+**DoD:** User profile in sidebar, persists across restarts
+
+#### M18-T3: Cloud Auth Integration
+
+**Scope:**
+- `POST /auth/oauth` endpoint accepts provider token, creates/links Cloud account
+- Replaces current email/password flow
+
+**Files:** `cloud/compass_cloud/auth.py`, `cloud/compass_cloud/server.py`
+
+**DoD:** Social auth tokens exchangeable for Cloud tokens
+
+---
+
+## M19: LiveConnector Base + GitHub/Jira
+
+**Deps:** M17 complete
+
+### Tasks
+
+#### M19-T1: LiveConnector Base Class
+
+**Scope:**
+- Add `LiveConnector(Connector)` in `engine/compass/connectors/live_base.py`
+- `auth_config`, `_get_token()`, `_api_get/post()` (HTTP helpers with auth headers)
+- Rate limiting (token bucket) and retry logic built into base
+- Existing file connectors unchanged — additive
+
+**Files:** `engine/compass/connectors/base.py`, `engine/compass/connectors/live_base.py` (create)
+
+**DoD:** LiveConnector base with HTTP helpers, rate limiting, token injection
+
+#### M19-T2: GitHub Live Connector
+
+**Deps:** M19-T1
+
+**Scope:**
+- When `auth` is set, use GitHub REST API: repo metadata, README, commits, issues, PRs, org repos
+- Falls back to local file ingestion when no auth
+- Use `httpx` (already a dependency)
+
+**Files:** `engine/compass/connectors/github_connector.py`
+
+**DoD:** GitHub fetches live data via API when credentials available
+
+#### M19-T3: Jira Cloud Live Connector
+
+**Deps:** M19-T1
+
+**Scope:**
+- Jira Cloud REST API v3 (`{site}.atlassian.net/rest/api/3/`)
+- JQL queries: project-scoped, last 30 days. Fetch issues, comments, sprints
+- Falls back to JSON import when no auth
+
+**Files:** `engine/compass/connectors/jira_connector.py`
+
+**DoD:** Jira fetches live issues via API when credentials available
+
+#### M19-T4: Connector Mode Toggle UI
+
+**Scope:**
+- "Live API" vs "File Import" toggle in SourceConnector
+- Live mode checks credentials store, shows "Connect {Service}" if not connected
+- Connected state shows sync status (last synced, item count)
+
+**Files:** `app/src/components/workspace/SourceConnector.tsx`, `app/src/components/workspace/ConnectorModeToggle.tsx` (create)
+
+**DoD:** Users choose live vs file mode per source
+
+---
+
+## M20: Remaining Live Connectors
+
+**Deps:** M19 complete
+
+### Tasks
+
+#### M20-T1: Slack Live Connector
+
+**Scope:** Slack Web API (`conversations.list/history`, `search.messages`). Rate: Tier 3 (50 req/min). Falls back to export directory.
+
+**Files:** `engine/compass/connectors/slack_connector.py`
+
+**DoD:** Slack fetches live channel data via API when credentials available
+
+#### M20-T2: Linear Live Connector
+
+**Scope:** Linear GraphQL API. Auth via API key or OAuth. Fetch issues, projects, cycles. Falls back to JSON export.
+
+**Files:** `engine/compass/connectors/linear_connector.py`
+
+**DoD:** Linear fetches live data via API when credentials available
+
+#### M20-T3: Confluence Live Connector
+
+**Scope:** Atlassian REST v2. Shares OAuth token with Jira. Fetch pages by space, convert ADF to text. Falls back to export.
+
+**Files:** `engine/compass/connectors/confluence_connector.py`
+
+**DoD:** Confluence fetches live pages via API when credentials available
+
+#### M20-T4: Notion Live Connector
+
+**Scope:** Notion API v1. Fetch databases, pages, block children → text. Falls back to markdown export.
+
+**Files:** `engine/compass/connectors/notion_connector.py`
+
+**DoD:** Notion fetches live pages via API when credentials available
+
+#### M20-T5: Zendesk Live Connector
+
+**Scope:** Zendesk REST API. Auth via token pair or OAuth. Fetch tickets, comments, satisfaction. Falls back to export.
+
+**Files:** `engine/compass/connectors/zendesk_connector.py`
+
+**DoD:** Zendesk fetches live tickets via API when credentials available
+
+#### M20-T6: Auto-Sync Scheduler
+
+**Scope:**
+- `POST /sync/schedule` with `{source_name, interval_minutes}`. Default: 60 min when app open
+- `GET /sync/status` returns last sync per source. Subtle sync indicator in sidebar
+
+**Files:** `engine/compass/server.py`, `engine/compass/sync.py` (create), `app/src/components/layout/Sidebar.tsx`
+
+**DoD:** Connected sources auto-refresh on schedule; user sees sync status
+
+---
+
+## M21: Non-Technical PM Onboarding
+
+**Deps:** M17 complete
+
+### Tasks
+
+#### M21-T1: Project Templates
+
+**Scope:**
+- Templates: "B2B SaaS", "Consumer App", "Platform/API", "Marketplace", "Internal Tool"
+- Each pre-configures: recommended sources, default chat mode, example questions, starter compass.yaml
+
+**Files:** `engine/compass/templates/` (create dir + templates), `engine/compass/server.py`, `app/src/pages/WorkspacePage.tsx`
+
+**DoD:** Create project from template with pre-configured sources
+
+#### M21-T2: Git Repo Auto-Creation
+
+**Scope:**
+- New projects auto `git init` with `.gitignore` (exclude `.compass/knowledge/`, `*.enc`)
+- Uses `gitpython` (already a dep). Initial commit with compass.yaml
+
+**Files:** `engine/compass/server.py` (modify `/init`), `engine/compass/git_utils.py` (create)
+
+**DoD:** New projects are git repos by default
+
+#### M21-T3: Push to GitHub
+
+**Deps:** M21-T2
+
+**Scope:**
+- If GitHub connected, "Push to GitHub" button. Creates repo via API, pushes
+- PM enters repo name, clicks button — done
+
+**Files:** `engine/compass/git_utils.py`, `engine/compass/server.py` (`POST /git/push`), `app/src/components/workspace/GitPush.tsx` (create)
+
+**DoD:** One-click repo creation + push for connected GitHub users
+
+#### M21-T4: Guided Onboarding V2
+
+**Deps:** M21-T1
+
+**Scope:**
+- Step-by-step wizard: 1) Sign in or skip → 2) Choose template → 3) Connect sources (OAuth buttons) → 4) First ingest + discovery
+- Progress indicator, contextual help, skip-able
+
+**Files:** `app/src/pages/OnboardingPage.tsx` (rewrite), `app/src/components/onboarding/` (create dir + steps)
+
+**DoD:** PM goes from zero to first discovery in under 5 minutes
+
+---
+
+## M22: Chart Engine & Evidence Visualization
+
+**Library: Recharts** — React-native, composable, 140KB, great TS support, works with Tailwind.
+
+### Tasks
+
+#### M22-T1: Chart Component Library
+
+**Scope:**
+- Add `recharts` to app. Build: `BarChart`, `LineChart`, `PieChart`, `AreaChart`, `RadarChart`
+- Dark theme styling matching compass tokens. Empty state handling
+
+**Files:** `app/src/components/charts/` (create: `BarChart.tsx`, `LineChart.tsx`, `PieChart.tsx`, `RadarChart.tsx`, `ChartTheme.ts`)
+
+**DoD:** Reusable chart components with consistent styling
+
+#### M22-T2: Evidence Distribution Dashboard
+
+**Deps:** M22-T1
+
+**Scope:**
+- Pie (by source type), bar (by connector), area (freshness timeline)
+- Dashboard tab on EvidencePage. Data from existing `/evidence` endpoint
+
+**Files:** `app/src/pages/EvidencePage.tsx`, `app/src/components/evidence/EvidenceDashboard.tsx` (create)
+
+**DoD:** Visual breakdown of ingested evidence
+
+#### M22-T3: Opportunity Confidence Charts
+
+**Deps:** M22-T1
+
+**Scope:**
+- Radar chart (confidence × impact × evidence strength). Bar chart ranking
+- List vs chart toggle on DiscoverPage
+
+**Files:** `app/src/pages/DiscoverPage.tsx`, `app/src/components/discover/OpportunityChart.tsx` (create)
+
+**DoD:** Discovery results with visual chart view
+
+#### M22-T4: Conflict Severity Matrix
+
+**Deps:** M22-T1
+
+**Scope:**
+- Matrix of conflicts by source pair (Code×Docs, Code×Data, etc.), color-coded severity
+
+**Files:** `app/src/pages/ConflictsPage.tsx`, `app/src/components/conflicts/ConflictMatrix.tsx` (create)
+
+**DoD:** Conflicts shown as visual heatmap
+
+---
+
+## M23: Analytics Dashboard
+
+**Deps:** M22-T1
+
+### Tasks
+
+#### M23-T1: Dashboard Engine Component
+
+**Scope:**
+- `Dashboarder(KG, model, prompt_version)` — takes NL question, generates chart specs
+- Output: `DashboardSpec` with `{title, charts: [{type, data, x_key, y_keys, title}]}`
+- LLM extracts numeric data from evidence for charting
+
+**Files:** `engine/compass/engine/dashboarder.py` (create), `engine/compass/models/dashboards.py` (create), `engine/compass/prompts/dashboard_v1.py` (create), `engine/compass/server.py`
+
+**DoD:** Engine generates chart specs from evidence + NL query
+
+#### M23-T2: Dashboard Page
+
+**Deps:** M23-T1
+
+**Scope:**
+- New page: `/dashboard`. User asks question → engine returns chart spec → Recharts renders
+- Pin charts to persistent dashboard. Saved in `.compass/dashboards.json`
+
+**Files:** `app/src/pages/DashboardPage.tsx` (create), `app/src/stores/dashboard.ts` (create), `app/src/components/layout/Sidebar.tsx`
+
+**DoD:** Generate and pin charts from NL queries
+
+#### M23-T3: Enhanced CSV/Excel Import
+
+**Scope:**
+- Analytics connector: structure detection, auto-detect column types, time series vs categorical
+
+**Files:** `engine/compass/connectors/analytics.py`
+
+**DoD:** Analytics ingests CSV/Excel with typed column detection
+
+---
+
+## M24: Rich Text Editor
+
+**Editor: Tiptap** (ProseMirror-based) — open-source, React 19 compatible, modular, markdown round-trip, Y.js collab ready.
+
+### Tasks
+
+#### M24-T1: Tiptap Editor Component
+
+**Scope:**
+- Deps: `@tiptap/react`, `@tiptap/starter-kit`, extensions (table, image, task-list, code-block)
+- `DocumentEditor` with toolbar: headings, bold/italic, lists, tables, code, images, tasks
+- Markdown import/export. Dark theme
+
+**Files:** `app/src/components/editor/DocumentEditor.tsx` (create), `app/src/components/editor/EditorToolbar.tsx` (create)
+
+**DoD:** Rich editor with toolbar and markdown round-tripping
+
+#### M24-T2: Document Storage
+
+**Scope:**
+- `Document` model: `{id, title, type, content_json, content_markdown, created_at, updated_at, tags, evidence_ids}`
+- Types: "brief", "prd", "update", "email", "strategy", "custom"
+- Storage: `.compass/documents/` dir, one JSON per doc
+- Endpoints: `POST /documents/save|list|get|delete`
+
+**Files:** `engine/compass/models/documents.py`, `engine/compass/documents.py` (create), `engine/compass/server.py`
+
+**DoD:** CRUD for documents
+
+#### M24-T3: Documents Page
+
+**Deps:** M24-T1, M24-T2
+
+**Scope:**
+- New page: `/documents`. List with type badges, last edited. Click to edit
+- "New Document" with type selector
+
+**Files:** `app/src/pages/DocumentsPage.tsx` (create), `app/src/stores/documents.ts` (create), Sidebar
+
+**DoD:** Create, edit, manage documents from dedicated page
+
+#### M24-T4: AI Document Generation
+
+**Deps:** M24-T1
+
+**Scope:**
+- "Generate with AI" in editor uses existing Writer engine
+- Works on selections: "Expand this section", "Add evidence for this claim"
+- Maps Writer output to Tiptap JSON
+
+**Files:** `app/src/components/editor/AIAssist.tsx` (create), `app/src/components/editor/DocumentEditor.tsx`
+
+**DoD:** AI generates content inline in editor
+
+---
+
+## M25: Document Sharing & Export
+
+**Deps:** M24 complete
+
+### Tasks
+
+#### M25-T1: Multi-Format Export
+
+**Scope:**
+- Markdown, HTML (styled), PDF (Electron `printToPDF`), DOCX (`docx` npm package)
+- Export button in editor toolbar and document list
+
+**Files:** `app/src/components/editor/ExportMenu.tsx` (create), `app/electron/main.ts`
+
+**DoD:** 4 export formats
+
+#### M25-T2: Link Sharing (Cloud)
+
+**Scope:**
+- Upload doc to Cloud → shareable URL
+- Simple viewer page, optionally password-protected
+
+**Files:** `cloud/compass_cloud/server.py`, `cloud/compass_cloud/documents.py` (create), `app/src/components/editor/ShareButton.tsx` (create)
+
+**DoD:** Cloud users generate shareable links
+
+#### M25-T3: Evidence Citation Insertion
+
+**Scope:**
+- "Insert Citation" command in editor → evidence search modal → styled inline citation
+
+**Files:** `app/src/components/editor/CitationInsert.tsx` (create), `app/src/components/editor/extensions/citation.ts` (create)
+
+**DoD:** Cite evidence inline in documents
+
+---
+
+## M26: Slide Builder
+
+### Tasks
+
+#### M26-T1: Presentation Engine Component
+
+**Scope:**
+- `Presenter(KG, model, prompt_version)` — topic + evidence IDs → structured deck
+- `Presentation` model: `{title, slides: [{title, layout, content_blocks: [{type, content}]}]}`
+- Block types: heading, text, bullet_list, quote, chart_spec, image_placeholder, evidence_citation
+- Layouts: title, content, two-column, image-left, chart, quote
+
+**Files:** `engine/compass/engine/presenter.py` (create), `engine/compass/models/presentations.py` (create), `engine/compass/prompts/present_v1.py` (create), `engine/compass/server.py`
+
+**DoD:** Engine generates structured slide deck from evidence
+
+#### M26-T2: Slide Renderer
+
+**Deps:** M26-T1
+
+**Scope:**
+- React component rendering `Presentation` as navigable slide deck
+- Full-viewport cards, keyboard nav, progress indicator, dark theme
+
+**Files:** `app/src/components/slides/SlideRenderer.tsx` (create), `app/src/components/slides/SlideLayouts.tsx` (create), `app/src/components/slides/SlideNavigation.tsx` (create)
+
+**DoD:** Presentations render as navigable decks
+
+#### M26-T3: Presentations Page
+
+**Deps:** M26-T2
+
+**Scope:**
+- `/presentations`. Create (enter topic, select evidence), list saved, edit (reorder/add/remove slides), present mode (fullscreen)
+
+**Files:** `app/src/pages/PresentationsPage.tsx` (create), `app/src/stores/presentations.ts` (create), Sidebar
+
+**DoD:** Create, edit, save, and present slide decks
+
+#### M26-T4: Slide Export
+
+**Deps:** M26-T2
+
+**Scope:**
+- HTML (self-contained, reveal.js-style), PDF (one page per slide)
+
+**Files:** `app/src/components/slides/SlideExport.tsx` (create), `app/electron/main.ts`
+
+**DoD:** Export as HTML and PDF
+
+---
+
+## M27: Presentation Intelligence
+
+**Deps:** M26 complete + M22-T1
+
+### Tasks
+
+#### M27-T1: Audience Adaptation
+
+**Scope:**
+- Select audience: Engineering, Leadership, Board, Customer, Cross-functional
+- Adjusts tone, detail, emphasis per audience type
+
+**Files:** `engine/compass/engine/presenter.py`, `engine/compass/prompts/present_v1.py`
+
+**DoD:** Presentations adapt to audience
+
+#### M27-T2: Speaker Notes
+
+**Scope:**
+- Auto-generated per slide: talking points, anticipated questions, evidence refs
+- Bottom panel in present mode
+
+**Files:** `engine/compass/engine/presenter.py`, `app/src/components/slides/PresenterView.tsx` (create)
+
+**DoD:** Slides have speaker notes in presenter view
+
+#### M27-T3: Chart Embedding
+
+**Scope:**
+- Slides with chart blocks (reuse M22 components). Presenter generates chart specs from evidence
+
+**Files:** `app/src/components/slides/SlideLayouts.tsx`, `engine/compass/engine/presenter.py`
+
+**DoD:** Slides contain rendered charts
+
+---
+
+## M28: Landing Page / UI Prototype Generator
+
+**Approach:** LLM generates self-contained HTML + Tailwind CDN. Rendered in sandboxed iframe. No build tooling.
+
+### Tasks
+
+#### M28-T1: Prototype Engine Component
+
+**Scope:**
+- `Prototyper(KG, model, prompt_version)` — description + evidence → HTML
+- Types: landing-page, dashboard, form, pricing-page, onboarding-flow
+- Output: `Prototype` with `{title, type, html, description, iterations: [{prompt, html}]}`
+
+**Files:** `engine/compass/engine/prototyper.py` (create), `engine/compass/models/prototypes.py` (create), `engine/compass/prompts/prototype_v1.py` (create), `engine/compass/server.py`
+
+**DoD:** Engine generates self-contained HTML prototypes
+
+#### M28-T2: Prototype Preview
+
+**Deps:** M28-T1
+
+**Scope:**
+- Sandboxed iframe. Split view: preview left, controls right
+- Responsive toggles: desktop/tablet/mobile. "Iterate" button for LLM revisions. Version history
+
+**Files:** `app/src/components/prototype/PrototypePreview.tsx` (create), `app/src/components/prototype/IterationPanel.tsx` (create), `app/src/components/prototype/ViewportToggle.tsx` (create)
+
+**DoD:** Prototypes render with responsive preview and iteration
+
+#### M28-T3: Prototypes Page
+
+**Deps:** M28-T2
+
+**Scope:**
+- `/prototypes`. New + type selector, gallery of saved prototypes, click to preview
+
+**Files:** `app/src/pages/PrototypesPage.tsx` (create), `app/src/stores/prototypes.ts` (create), Sidebar
+
+**DoD:** Create, iterate, save, browse prototypes
+
+#### M28-T4: Prototype Export
+
+**Deps:** M28-T2
+
+**Scope:**
+- HTML file (self-contained), PNG screenshot (Electron `capturePage`), hosted URL (Cloud)
+
+**Files:** `app/src/components/prototype/PrototypeExport.tsx` (create), `app/electron/main.ts`
+
+**DoD:** Export as HTML, PNG, hosted URL
+
+---
+
+## M29: Prototype Intelligence
+
+**Deps:** M28 complete
+
+### Tasks
+
+#### M29-T1: Evidence-Driven Content
+
+**Scope:**
+- Prototyper queries KG: real product names, metrics, user quotes populate the prototype
+
+**Files:** `engine/compass/engine/prototyper.py`
+
+**DoD:** Prototypes use realistic content from evidence
+
+#### M29-T2: Component Library
+
+**Scope:**
+- Pre-built HTML snippets: hero, feature grid, pricing, testimonials, signup, dashboard
+- Reference by name in descriptions or browse library
+
+**Files:** `engine/compass/prototype_components/` (create dir + HTML), `app/src/components/prototype/ComponentLibrary.tsx` (create)
+
+**DoD:** Compose prototypes from pre-built components
+
+#### M29-T3: A/B Variant Generation
+
+**Scope:**
+- "Generate Variants" creates 2-3 alternatives. Side-by-side comparison view
+
+**Files:** `engine/compass/engine/prototyper.py`, `app/src/components/prototype/VariantComparison.tsx` (create)
+
+**DoD:** Generate and compare variant prototypes
+
+---
+
+## M30: Team Collaboration
+
+**Deps:** M17-M29 complete
+
+### Tasks
+
+#### M30-T1: Workspace Sharing
+
+**Scope:**
+- Share workspace with team via Cloud. Invite by email, read/write access. Sync via Cloud hub
+
+**Files:** `cloud/compass_cloud/teams.py`, `cloud/compass_cloud/server.py`, `app/src/components/workspace/ShareWorkspace.tsx` (create)
+
+**DoD:** Workspaces shareable with team members
+
+#### M30-T2: Unified Export Hub
+
+**Scope:**
+- Single "Export" in command palette for any content type. Format selector. Batch "Export All" → ZIP
+
+**Files:** `app/src/components/export/ExportHub.tsx` (create), `app/electron/main.ts`
+
+**DoD:** Unified export for all content types
+
+#### M30-T3: Activity Feed
+
+**Scope:**
+- Workspace activity: evidence ingested, docs created, discoveries run, presentations built
+
+**Files:** `engine/compass/activity.py` (create), `engine/compass/server.py`, `app/src/components/workspace/ActivityFeed.tsx` (create)
+
+**DoD:** Activity feed shows workspace history
+
+#### M30-T4: Notification System
+
+**Scope:**
+- In-app + desktop notifications: sync complete, new conflicts, shared doc updated, team joined
+- Bell in sidebar. Electron `Notification` API
+
+**Files:** `app/src/stores/notifications.ts` (create), `app/src/components/layout/NotificationBell.tsx` (create), `app/electron/main.ts`
+
+**DoD:** Users receive notifications for key events
+
+---
+
+## New Dependencies (M17-M30)
+
+**Engine (pyproject.toml):**
+- `openpyxl>=3.1.0` (Excel parsing, M23)
+
+**App (package.json):**
+- `recharts ^2.12.0` (M22)
+- `@tiptap/react ^2.6.0`, `@tiptap/starter-kit ^2.6.0`, `@tiptap/extension-table ^2.6.0`, `@tiptap/extension-image ^2.6.0`, `@tiptap/extension-task-list ^2.6.0`, `@tiptap/extension-code-block-lowlight ^2.6.0` (M24)
+- `docx ^8.5.0` (M25)
+- `jszip ^3.10.0` (M30)
+
+## M17-M30 Summary
+
+| Milestone | Tasks | Theme |
+|-----------|-------|-------|
+| M17 | 5 | Auth Infrastructure |
+| M18 | 3 | Social Auth |
+| M19 | 4 | Live Connectors (GitHub, Jira) |
+| M20 | 6 | All Live Connectors |
+| M21 | 4 | PM Onboarding |
+| M22 | 4 | Chart Engine |
+| M23 | 3 | Analytics Dashboard |
+| M24 | 4 | Document Editor |
+| M25 | 3 | Document Sharing |
+| M26 | 4 | Slide Builder |
+| M27 | 3 | Slide Intelligence |
+| M28 | 4 | Prototype Builder |
+| M29 | 3 | Prototype Intelligence |
+| M30 | 4 | Collaboration |
+| **Total** | **54 tasks** | **14 milestones** |
