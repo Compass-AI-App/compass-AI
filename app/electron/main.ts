@@ -218,3 +218,98 @@ function loadSecretsFile(): Record<string, string> {
     return {};
   }
 }
+
+// --- Credential Vault ---
+// Structured credential storage for OAuth tokens and API keys.
+// Credentials are stored as encrypted JSON blobs keyed by "credential:{provider}".
+// This is separate from the flat secrets store to support structured credential objects.
+
+const CREDENTIAL_PREFIX = "credential:";
+
+function encryptValue(value: string): string {
+  if (safeStorage.isEncryptionAvailable()) {
+    return safeStorage.encryptString(value).toString("base64");
+  }
+  return value;
+}
+
+function decryptValue(encrypted: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) {
+    return encrypted;
+  }
+  try {
+    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle(
+  "credential-store",
+  async (_event, provider: string, credential: unknown) => {
+    const store = loadSecretsFile();
+    const key = CREDENTIAL_PREFIX + provider;
+    store[key] = encryptValue(JSON.stringify(credential));
+    fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
+    return true;
+  }
+);
+
+ipcMain.handle("credential-load", async (_event, provider: string) => {
+  const store = loadSecretsFile();
+  const key = CREDENTIAL_PREFIX + provider;
+  const encrypted = store[key];
+  if (!encrypted) return null;
+  const decrypted = decryptValue(encrypted);
+  if (!decrypted) return null;
+  try {
+    return JSON.parse(decrypted);
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle("credential-delete", async (_event, provider: string) => {
+  const store = loadSecretsFile();
+  const key = CREDENTIAL_PREFIX + provider;
+  delete store[key];
+  fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
+  return true;
+});
+
+ipcMain.handle("credential-list", async () => {
+  const store = loadSecretsFile();
+  const credentials: Array<{
+    provider: string;
+    method: string;
+    status: string;
+    scopes?: string[];
+    expires_at?: number;
+    metadata?: Record<string, string>;
+  }> = [];
+
+  for (const key of Object.keys(store)) {
+    if (!key.startsWith(CREDENTIAL_PREFIX)) continue;
+    const provider = key.slice(CREDENTIAL_PREFIX.length);
+    const decrypted = decryptValue(store[key]);
+    if (!decrypted) continue;
+
+    try {
+      const cred = JSON.parse(decrypted);
+      const now = Date.now();
+      const isExpired = cred.expires_at && cred.expires_at < now;
+      credentials.push({
+        provider,
+        method: cred.method || "oauth",
+        status: isExpired ? "expired" : "connected",
+        scopes: cred.scopes,
+        expires_at: cred.expires_at,
+        metadata: cred.metadata,
+      });
+    } catch {
+      // Skip corrupted entries
+    }
+  }
+
+  return credentials;
+});

@@ -21,10 +21,37 @@ interface CompassSecrets {
   delete: (key: string) => Promise<boolean>;
 }
 
+interface CredentialObject {
+  provider: string;
+  method: "oauth" | "api_key" | "pat";
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  scopes?: string[];
+  metadata?: Record<string, string>;
+}
+
+interface CredentialInfoObject {
+  provider: string;
+  method: string;
+  status: "connected" | "expired" | "disconnected";
+  scopes?: string[];
+  expires_at?: number;
+  metadata?: Record<string, string>;
+}
+
+interface CompassCredentials {
+  store: (provider: string, credential: CredentialObject) => Promise<boolean>;
+  load: (provider: string) => Promise<CredentialObject | null>;
+  delete: (provider: string) => Promise<boolean>;
+  list: () => Promise<CredentialInfoObject[]>;
+}
+
 interface Window {
   compass: {
     engine: CompassEngine;
     app: CompassApp;
     secrets: CompassSecrets;
+    credentials: CompassCredentials;
   };
 }
