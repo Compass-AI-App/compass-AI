@@ -5,6 +5,7 @@ import {
   Database,
   AlertTriangle,
   Lightbulb,
+  LayoutDashboard,
   MessageCircle,
   Settings,
   Compass,
@@ -26,6 +27,7 @@ const navItems = [
   { to: "/evidence", icon: Database, label: "Evidence" },
   { to: "/conflicts", icon: AlertTriangle, label: "Conflicts" },
   { to: "/discover", icon: Lightbulb, label: "Discover" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/chat", icon: MessageCircle, label: "Chat" },
 ];
 

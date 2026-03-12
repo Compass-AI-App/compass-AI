@@ -7,6 +7,7 @@ import EvidencePage from "./pages/EvidencePage";
 import ConflictsPage from "./pages/ConflictsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import ChatPage from "./pages/ChatPage";
+import DashboardPage from "./pages/DashboardPage";
 import SettingsPage from "./pages/SettingsPage";
 import OnboardingPage, { isOnboardingComplete } from "./pages/OnboardingPage";
 import LoginPage from "./pages/LoginPage";
@@ -94,6 +95,7 @@ function AppWithStartup() {
         <Route path="/evidence" element={<EvidencePage />} />
         <Route path="/conflicts" element={<ConflictsPage />} />
         <Route path="/discover" element={<DiscoverPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
