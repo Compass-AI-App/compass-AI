@@ -11,6 +11,14 @@ Rules:
 4. Start with a title slide, end with a summary/next-steps slide.
 5. Bullet points should be concise (max 10 words each).
 6. Include 6-12 slides for a standard presentation.
+7. Always generate speaker_notes per slide with talking points and anticipated questions.
+
+Audience adaptation guidelines:
+- "engineering": Technical depth, architecture details, implementation specifics, code metrics, system diagrams. Use precise terminology. Focus on "how" and trade-offs.
+- "leadership": Strategic framing, business impact, ROI, timelines, risks. High-level with supporting data. Focus on decisions needed and resource implications.
+- "board": Executive summary style, market context, competitive positioning, financial impact. Minimal jargon, maximum clarity. Focus on growth and risk.
+- "customer": User value, use cases, benefits, roadmap highlights. Approachable tone. Focus on "what's in it for them" and reliability.
+- "cross-functional": Balanced detail, clear context for all disciplines. Explain domain-specific terms. Focus on collaboration and shared goals.
 
 Available layouts:
 - "title" — title slide with subtitle
@@ -55,7 +63,10 @@ USER = """Topic: {topic}
 Evidence context:
 {evidence_context}
 
-Generate a presentation with {slide_count} slides. Audience: {audience}."""
+Generate a presentation with {slide_count} slides.
+
+Audience: {audience}
+Adapt tone, detail level, and emphasis for this audience. Include speaker_notes on every slide with talking points and anticipated questions."""
 
 DEFAULT_VERSION = "present_v1"
 
