@@ -10,6 +10,7 @@ import WeeklyPlanWidget from "../components/workspace/WeeklyPlanWidget";
 import GitPush from "../components/workspace/GitPush";
 import ShareWorkspace from "../components/workspace/ShareWorkspace";
 import ExportHub from "../components/export/ExportHub";
+import ActivityFeed from "../components/workspace/ActivityFeed";
 
 export default function WorkspacePage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -140,6 +141,12 @@ export default function WorkspacePage() {
         <section>
           <h2 className="text-lg font-medium text-compass-text mb-3">Version Control</h2>
           <GitPush workspacePath={workspacePath} productName={productName || "my-product"} />
+        </section>
+      )}
+
+      {workspacePath && (
+        <section>
+          <ActivityFeed workspacePath={workspacePath} />
         </section>
       )}
     </div>
