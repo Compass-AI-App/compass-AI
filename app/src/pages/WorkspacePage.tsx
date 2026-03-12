@@ -7,6 +7,7 @@ import SourceConnector from "../components/workspace/SourceConnector";
 import IngestButton from "../components/workspace/IngestButton";
 import WorkspacePicker from "../components/workspace/WorkspacePicker";
 import WeeklyPlanWidget from "../components/workspace/WeeklyPlanWidget";
+import GitPush from "../components/workspace/GitPush";
 
 export default function WorkspacePage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -119,10 +120,17 @@ export default function WorkspacePage() {
         <SourceConnector />
       </section>
 
-      <section>
+      <section className="mb-8">
         <h2 className="text-lg font-medium text-compass-text mb-3">Ingest Evidence</h2>
         <IngestButton />
       </section>
+
+      {workspacePath && (
+        <section>
+          <h2 className="text-lg font-medium text-compass-text mb-3">Version Control</h2>
+          <GitPush workspacePath={workspacePath} productName={productName || "my-product"} />
+        </section>
+      )}
     </div>
   );
 }
