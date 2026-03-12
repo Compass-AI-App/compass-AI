@@ -18,6 +18,7 @@ import { useSettingsStore } from "../../stores/settings";
 import { useWorkspaceManager } from "../../stores/workspaceManager";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "../../stores/chat";
+import { useAuthStore } from "../../stores/auth";
 
 const navItems = [
   { to: "/workspace", icon: Home, label: "Workspace" },
@@ -45,6 +46,8 @@ export default function Sidebar() {
   const { workspaces, loadWorkspaces, loaded, openWorkspace } = useWorkspaceManager();
   const clearMessages = useChatStore((s) => s.clearMessages);
   const loadHistory = useChatStore((s) => s.loadHistory);
+  const user = useAuthStore((s) => s.user);
+  const loadProfile = useAuthStore((s) => s.loadProfile);
   const navigate = useNavigate();
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -52,6 +55,10 @@ export default function Sidebar() {
   useEffect(() => {
     if (!loaded) loadWorkspaces();
   }, [loaded]);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   // Close picker on outside click
   useEffect(() => {
@@ -177,6 +184,31 @@ export default function Sidebar() {
 
       {/* Bottom section */}
       <div className="px-2 pb-3 shrink-0">
+        {/* User profile */}
+        {user && (
+          <div className="flex items-center gap-2 px-3 py-2 mb-1">
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.name}
+                className="w-6 h-6 rounded-full shrink-0"
+              />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-compass-accent/20 flex items-center justify-center shrink-0">
+                <span className="text-xs font-medium text-compass-accent">
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-compass-text truncate">{user.name}</p>
+              {user.email && (
+                <p className="text-[10px] text-compass-muted truncate">{user.email}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         <NavLink
           to="/settings"
           className={({ isActive }) =>
