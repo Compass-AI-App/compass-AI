@@ -61,7 +61,7 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
   if (!editor) return null;
 
   return (
-    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-compass-border bg-compass-card/50 rounded-t-xl flex-wrap">
+    <div className="flex items-center gap-0.5 px-2 py-1.5 bg-compass-card/50 flex-wrap flex-1">
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}

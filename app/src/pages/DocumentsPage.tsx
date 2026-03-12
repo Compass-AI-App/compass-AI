@@ -298,6 +298,8 @@ function DocumentEditView({
         }
         onChange={handleEditorChange}
         placeholder="Start writing..."
+        workspacePath={workspacePath}
+        docType={doc.doc_type}
       />
     </div>
   );
