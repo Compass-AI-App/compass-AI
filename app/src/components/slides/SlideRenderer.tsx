@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import SlideLayout from "./SlideLayouts";
 import SlideNavigation from "./SlideNavigation";
+import SlideExport from "./SlideExport";
 import type { ContentBlock } from "./SlideLayouts";
 
 interface SlideData {
@@ -124,13 +125,16 @@ export default function SlideRenderer({ presentation }: SlideRendererProps) {
         <h3 className="text-lg font-semibold text-compass-text">
           {presentation.title}
         </h3>
-        <button
-          onClick={() => setIsFullscreen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-compass-muted hover:text-compass-text hover:bg-white/5 rounded-lg transition-colors"
-        >
-          <Maximize2 className="w-4 h-4" />
-          Present
-        </button>
+        <div className="flex items-center gap-2">
+          <SlideExport presentation={presentation} />
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-compass-muted hover:text-compass-text hover:bg-white/5 rounded-lg transition-colors"
+          >
+            <Maximize2 className="w-4 h-4" />
+            Present
+          </button>
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto">
