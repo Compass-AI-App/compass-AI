@@ -5,12 +5,15 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import EditorToolbar from "./EditorToolbar";
+import AIAssist from "./AIAssist";
 
 interface DocumentEditorProps {
   content?: string | Record<string, unknown>;
   onChange?: (json: Record<string, unknown>, markdown: string) => void;
   placeholder?: string;
   editable?: boolean;
+  workspacePath?: string;
+  docType?: string;
 }
 
 /**
@@ -99,6 +102,8 @@ export default function DocumentEditor({
   onChange,
   placeholder = "Start writing...",
   editable = true,
+  workspacePath,
+  docType,
 }: DocumentEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -139,7 +144,16 @@ export default function DocumentEditor({
 
   return (
     <div className="rounded-xl bg-compass-card border border-compass-border overflow-hidden">
-      {editable && <EditorToolbar editor={editor} />}
+      {editable && (
+        <div className="flex items-center border-b border-compass-border">
+          <EditorToolbar editor={editor} />
+          <div className="ml-auto pr-2">
+            {workspacePath && (
+              <AIAssist editor={editor} workspacePath={workspacePath} docType={docType} />
+            )}
+          </div>
+        </div>
+      )}
       <EditorContent editor={editor} />
     </div>
   );
