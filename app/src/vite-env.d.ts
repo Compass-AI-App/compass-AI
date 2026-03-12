@@ -75,6 +75,11 @@ interface CompassOAuth {
   ) => Promise<{ access_token: string; refresh_token: string; expires_at?: number }>;
 }
 
+interface CompassProviders {
+  get: (id: string) => Promise<OAuthProviderConfig | null>;
+  list: () => Promise<OAuthProviderConfig[]>;
+}
+
 interface Window {
   compass: {
     engine: CompassEngine;
@@ -82,5 +87,6 @@ interface Window {
     secrets: CompassSecrets;
     credentials: CompassCredentials;
     oauth: CompassOAuth;
+    providers: CompassProviders;
   };
 }

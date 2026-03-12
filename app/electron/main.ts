@@ -4,6 +4,7 @@ import fs from "fs";
 import { autoUpdater } from "electron-updater";
 import { startEngine, stopEngine, engineFetch } from "./engine-bridge";
 import { registerOAuthIPC, handleOAuthCallback } from "./oauth";
+import { getProvider, getAllProviders } from "./oauth-providers";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -51,6 +52,7 @@ if (process.defaultApp) {
 app.whenReady().then(async () => {
   createWindow();
   registerOAuthIPC();
+  registerProviderIPC();
 
   try {
     await startEngine();
@@ -347,3 +349,15 @@ ipcMain.handle("credential-list", async () => {
 
   return credentials;
 });
+
+// --- OAuth Provider Registry IPC ---
+
+function registerProviderIPC(): void {
+  ipcMain.handle("provider-get", async (_event, id: string) => {
+    return getProvider(id);
+  });
+
+  ipcMain.handle("provider-list", async () => {
+    return getAllProviders();
+  });
+}
