@@ -8,6 +8,7 @@ import IngestButton from "../components/workspace/IngestButton";
 import WorkspacePicker from "../components/workspace/WorkspacePicker";
 import WeeklyPlanWidget from "../components/workspace/WeeklyPlanWidget";
 import GitPush from "../components/workspace/GitPush";
+import ShareWorkspace from "../components/workspace/ShareWorkspace";
 
 export default function WorkspacePage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -92,9 +93,15 @@ export default function WorkspacePage() {
 
   return (
     <div className="p-8 max-w-4xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Home className="w-6 h-6 text-compass-accent" />
-        <h1 className="text-2xl font-semibold text-compass-text">{productName}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Home className="w-6 h-6 text-compass-accent" />
+          <h1 className="text-2xl font-semibold text-compass-text">{productName}</h1>
+        </div>
+        <ShareWorkspace
+          workspaceName={productName || ""}
+          workspaceDescription=""
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-8">

@@ -20,12 +20,18 @@ router = APIRouter(prefix="/teams", tags=["teams"])
 _workspaces: dict[str, "TeamWorkspace"] = {}  # workspace_id -> TeamWorkspace
 
 
+class MemberAccess(BaseModel):
+    email: str
+    role: str = "read"  # "read" or "write"
+
+
 class TeamWorkspace(BaseModel):
     id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex[:12])
     name: str
     description: str = ""
     owner_email: str
     members: list[str] = Field(default_factory=list)  # email list
+    member_access: list[MemberAccess] = Field(default_factory=list)
     source_types: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
 
@@ -37,6 +43,7 @@ class CreateWorkspaceRequest(BaseModel):
 
 class InviteRequest(BaseModel):
     email: str
+    role: str = "read"  # "read" or "write"
 
 
 class WorkspaceResponse(BaseModel):
@@ -45,6 +52,7 @@ class WorkspaceResponse(BaseModel):
     description: str
     owner_email: str
     members: list[str]
+    member_access: list[MemberAccess] = Field(default_factory=list)
     source_types: list[str]
     created_at: datetime
 
@@ -112,7 +120,8 @@ async def invite_member(workspace_id: str, req: InviteRequest, authorization: st
         raise HTTPException(400, "User is already a member")
 
     ws.members.append(req.email)
-    return {"status": "ok", "message": f"Invited {req.email}"}
+    ws.member_access.append(MemberAccess(email=req.email, role=req.role))
+    return {"status": "ok", "message": f"Invited {req.email} with {req.role} access"}
 
 
 @router.delete("/workspaces/{workspace_id}/members/{email}")
