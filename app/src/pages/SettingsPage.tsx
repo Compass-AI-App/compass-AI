@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { Settings, Key, Cpu, BarChart3, RotateCcw, Shield } from "lucide-react";
+import { Settings, Key, Cpu, BarChart3, RotateCcw, Shield, LinkIcon } from "lucide-react";
 import { clsx } from "clsx";
 import { useSettingsStore } from "../stores/settings";
 import { resetOnboarding } from "./OnboardingPage";
+import ConnectedAccounts from "../components/settings/ConnectedAccounts";
 
 const MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
@@ -56,6 +57,11 @@ export default function SettingsPage() {
             Encrypted with your OS keychain. Sent directly to Anthropic — never to Compass servers.
           </p>
         </div>
+      </Section>
+
+      {/* Connected Accounts */}
+      <Section icon={LinkIcon} title="Connected Accounts">
+        <ConnectedAccounts />
       </Section>
 
       {/* Reset onboarding */}
