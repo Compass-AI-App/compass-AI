@@ -17,6 +17,7 @@ from compass.prompts.plan_week_v1 import SYSTEM as PLAN_WEEK_V1_SYSTEM, PROMPT a
 from compass.prompts.analyze_data_v1 import SYSTEM as ANALYZE_DATA_V1_SYSTEM, PROMPT as ANALYZE_DATA_V1_PROMPT
 from compass.prompts.dashboard_v1 import SYSTEM as DASHBOARD_V1_SYSTEM, PROMPT as DASHBOARD_V1_PROMPT
 from compass.prompts.present_v1 import SYSTEM as PRESENT_V1_SYSTEM, USER as PRESENT_V1_PROMPT
+from compass.prompts.prototype_v1 import SYSTEM as PROTOTYPE_V1_SYSTEM, USER as PROTOTYPE_V1_PROMPT
 
 # Default prompt version
 DEFAULT_VERSION = "v1"
@@ -55,6 +56,9 @@ REGISTRY: dict[str, dict[str, dict[str, str]]] = {
     },
     "present": {
         "v1": {"system": PRESENT_V1_SYSTEM, "prompt": PRESENT_V1_PROMPT},
+    },
+    "prototype": {
+        "v1": {"system": PROTOTYPE_V1_SYSTEM, "prompt": PROTOTYPE_V1_PROMPT},
     },
 }
 

@@ -1249,6 +1249,72 @@ def presentation_generate(req: PresentationRequest):
     }
 
 
+# ---------- Prototype endpoints ----------
+
+class PrototypeGenerateRequest(BaseModel):
+    workspace_path: str
+    description: str
+    prototype_type: str = "landing-page"
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class PrototypeIterateRequest(BaseModel):
+    workspace_path: str
+    html: str
+    title: str = "Prototype"
+    prototype_type: str = "landing-page"
+    description: str = ""
+    iteration_prompt: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+@app.post("/prototype/generate")
+def prototype_generate(req: PrototypeGenerateRequest):
+    """Generate a self-contained HTML prototype from evidence."""
+    kg = _try_get_kg(req.workspace_path)
+    if not kg or len(kg) == 0:
+        raise HTTPException(400, "No evidence available. Ingest sources first.")
+
+    from compass.engine.prototyper import Prototyper
+    prototyper = Prototyper(kg)
+    prototype = prototyper.generate(
+        description=req.description,
+        prototype_type=req.prototype_type,
+        evidence_ids=req.evidence_ids or None,
+    )
+
+    return {
+        "status": "ok",
+        "prototype": prototype.model_dump(),
+    }
+
+
+@app.post("/prototype/iterate")
+def prototype_iterate(req: PrototypeIterateRequest):
+    """Iterate on an existing prototype."""
+    kg = _try_get_kg(req.workspace_path)
+    if not kg or len(kg) == 0:
+        raise HTTPException(400, "No evidence available. Ingest sources first.")
+
+    from compass.engine.prototyper import Prototyper
+    from compass.models.prototypes import Prototype
+
+    prototyper = Prototyper(kg)
+    current = Prototype(
+        title=req.title,
+        type=req.prototype_type,
+        html=req.html,
+        description=req.description,
+        evidence_ids=req.evidence_ids,
+    )
+    updated = prototyper.iterate(current, req.iteration_prompt)
+
+    return {
+        "status": "ok",
+        "prototype": updated.model_dump(),
+    }
+
+
 # ---------- Template endpoints ----------
 
 from compass.templates import list_templates, get_template
