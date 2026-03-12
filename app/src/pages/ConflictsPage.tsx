@@ -3,6 +3,7 @@ import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConflictsStore } from "../stores/conflicts";
 import ConflictCard from "../components/conflicts/ConflictCard";
+import ConflictMatrix from "../components/conflicts/ConflictMatrix";
 
 export default function ConflictsPage() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -52,6 +53,13 @@ export default function ConflictsPage() {
           {loading ? "Reconciling..." : conflicts.length > 0 ? "Re-run Reconciliation" : "Run Reconciliation"}
         </button>
       </div>
+
+      {/* Conflict matrix */}
+      {conflicts.length > 0 && (
+        <div className="mb-6">
+          <ConflictMatrix conflicts={conflicts} />
+        </div>
+      )}
 
       {/* Conflict list */}
       {loading ? (
