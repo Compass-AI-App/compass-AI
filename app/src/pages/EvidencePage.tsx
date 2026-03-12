@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, Search } from "lucide-react";
+import { Database, Search, BarChart3, List } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useEvidenceStore } from "../stores/evidence";
 import EvidenceCard from "../components/evidence/EvidenceCard";
+import EvidenceDashboard from "../components/evidence/EvidenceDashboard";
 import type { SourceType } from "../types/engine";
 
 const TABS: { key: SourceType | null; label: string }[] = [
@@ -28,6 +29,7 @@ export default function EvidencePage() {
     useEvidenceStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<"list" | "dashboard">("list");
 
   // Read ?id= from URL to highlight a specific evidence item
   useEffect(() => {
@@ -70,9 +72,35 @@ export default function EvidencePage() {
       <div className="flex items-center gap-3 mb-6">
         <Database className="w-6 h-6 text-compass-accent" />
         <h1 className="text-2xl font-semibold text-compass-text">Evidence</h1>
-        <span className="text-sm text-compass-muted ml-auto">{items.length} items</span>
+        <span className="text-sm text-compass-muted ml-auto mr-2">{items.length} items</span>
+        <div className="flex items-center gap-1 bg-compass-card border border-compass-border rounded-lg p-0.5">
+          <button
+            onClick={() => setView("list")}
+            className={clsx(
+              "p-1.5 rounded-md transition-colors",
+              view === "list" ? "bg-white/10 text-compass-text" : "text-compass-muted hover:text-compass-text"
+            )}
+            title="List view"
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setView("dashboard")}
+            className={clsx(
+              "p-1.5 rounded-md transition-colors",
+              view === "dashboard" ? "bg-white/10 text-compass-text" : "text-compass-muted hover:text-compass-text"
+            )}
+            title="Dashboard view"
+          >
+            <BarChart3 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
+      {view === "dashboard" ? (
+        <EvidenceDashboard items={items} />
+      ) : (
+      <>
       {/* Search */}
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-compass-muted" />
@@ -141,6 +169,8 @@ export default function EvidencePage() {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
