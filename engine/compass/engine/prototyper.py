@@ -31,6 +31,51 @@ def _format_evidence(items: list[Evidence], max_items: int = 20) -> str:
     return "\n".join(lines)
 
 
+def _extract_content_signals(items: list[Evidence]) -> str:
+    """Extract product names, metrics, and quotes from evidence for realistic content."""
+    if not items:
+        return ""
+
+    names: list[str] = []
+    metrics: list[str] = []
+    quotes: list[str] = []
+
+    for item in items:
+        content = item.content
+
+        # Extract numeric metrics (e.g., "95% uptime", "$1.2M ARR", "10,000 users")
+        for match in re.finditer(
+            r"(?:\$[\d,.]+[KMB]?|\d[\d,.]*%|\d[\d,.]+\s*(?:users?|customers?|DAU|MAU|ARR|MRR|NPS|sessions?))",
+            content,
+            re.IGNORECASE,
+        ):
+            metric = match.group().strip()
+            if metric not in metrics:
+                metrics.append(metric)
+
+        # Extract quoted text (potential testimonials/user quotes)
+        for match in re.finditer(r'"([^"]{20,200})"', content):
+            quote = match.group(1).strip()
+            if quote not in quotes:
+                quotes.append(quote)
+
+        # Use evidence titles as potential product/feature names
+        if item.title and item.title not in names:
+            names.append(item.title)
+
+    sections = []
+    if names[:10]:
+        sections.append("Product/feature names from evidence:\n" + "\n".join(f"  - {n}" for n in names[:10]))
+    if metrics[:10]:
+        sections.append("Real metrics from evidence:\n" + "\n".join(f"  - {m}" for m in metrics[:10]))
+    if quotes[:5]:
+        sections.append("User quotes from evidence:\n" + "\n".join(f'  - "{q}"' for q in quotes[:5]))
+
+    if not sections:
+        return ""
+    return "\n\n".join(sections)
+
+
 def _clean_html(raw: str) -> str:
     """Strip markdown code fences if LLM wraps output."""
     raw = raw.strip()
@@ -78,10 +123,16 @@ class Prototyper:
 
         prompts = get_prompts("prototype", self.prompt_version)
 
+        # Build enriched evidence context with extracted content signals
+        evidence_context = _format_evidence(evidence)
+        content_signals = _extract_content_signals(evidence)
+        if content_signals:
+            evidence_context += "\n\n--- Extracted content for realistic prototype ---\n" + content_signals
+
         prompt = prompts["prompt"].format(
             description=description,
             prototype_type=prototype_type,
-            evidence_context=_format_evidence(evidence),
+            evidence_context=evidence_context,
         )
 
         raw_html = ask(prompt, system=prompts["system"], model=self.model, max_tokens=16384)
