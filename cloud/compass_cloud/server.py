@@ -6,6 +6,7 @@ from fastapi import FastAPI, Header, HTTPException
 from compass_cloud.models import (
     AuthRequest,
     AuthResponse,
+    OAuthRequest,
     UserResponse,
     PLAN_LIMITS,
 )
@@ -47,6 +48,22 @@ def health():
 def signup(req: AuthRequest):
     try:
         user, token = auth.signup(req.email, req.password)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    return AuthResponse(
+        token=token,
+        user_id=user.id,
+        email=user.email,
+        plan=user.plan,
+    )
+
+
+@app.post("/auth/oauth", response_model=AuthResponse)
+async def oauth_login(req: OAuthRequest):
+    """Exchange a provider OAuth token for a Compass Cloud token."""
+    try:
+        user, token = await auth.oauth_login(req.provider, req.access_token)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
