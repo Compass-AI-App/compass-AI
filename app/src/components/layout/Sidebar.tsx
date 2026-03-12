@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   FileText,
   Presentation,
+  Code2,
   MessageCircle,
   Settings,
   Compass,
@@ -32,6 +33,7 @@ const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/documents", icon: FileText, label: "Documents" },
   { to: "/presentations", icon: Presentation, label: "Presentations" },
+  { to: "/prototypes", icon: Code2, label: "Prototypes" },
   { to: "/chat", icon: MessageCircle, label: "Chat" },
 ];
 
