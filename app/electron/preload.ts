@@ -32,4 +32,12 @@ contextBridge.exposeInMainWorld("compass", {
     load: (key: string) => ipcRenderer.invoke("secrets-load", key),
     delete: (key: string) => ipcRenderer.invoke("secrets-delete", key),
   },
+  credentials: {
+    store: (provider: string, credential: unknown) =>
+      ipcRenderer.invoke("credential-store", provider, credential),
+    load: (provider: string) => ipcRenderer.invoke("credential-load", provider),
+    delete: (provider: string) =>
+      ipcRenderer.invoke("credential-delete", provider),
+    list: () => ipcRenderer.invoke("credential-list"),
+  },
 });
