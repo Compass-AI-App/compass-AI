@@ -7,6 +7,7 @@ import {
   Lightbulb,
   LayoutDashboard,
   FileText,
+  Presentation,
   MessageCircle,
   Settings,
   Compass,
@@ -30,6 +31,7 @@ const navItems = [
   { to: "/discover", icon: Lightbulb, label: "Discover" },
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/documents", icon: FileText, label: "Documents" },
+  { to: "/presentations", icon: Presentation, label: "Presentations" },
   { to: "/chat", icon: MessageCircle, label: "Chat" },
 ];
 
