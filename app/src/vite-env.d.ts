@@ -47,11 +47,40 @@ interface CompassCredentials {
   list: () => Promise<CredentialInfoObject[]>;
 }
 
+interface OAuthProviderConfig {
+  id: string;
+  name: string;
+  auth_url: string;
+  token_url: string;
+  client_id: string;
+  scopes: string[];
+  icon?: string;
+  extra_auth_params?: Record<string, string>;
+  api_key_only?: boolean;
+}
+
+interface OAuthResultObject {
+  provider: string;
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  scopes: string[];
+}
+
+interface CompassOAuth {
+  start: (providerConfig: OAuthProviderConfig) => Promise<OAuthResultObject>;
+  refresh: (
+    providerConfig: OAuthProviderConfig,
+    refreshToken: string
+  ) => Promise<{ access_token: string; refresh_token: string; expires_at?: number }>;
+}
+
 interface Window {
   compass: {
     engine: CompassEngine;
     app: CompassApp;
     secrets: CompassSecrets;
     credentials: CompassCredentials;
+    oauth: CompassOAuth;
   };
 }

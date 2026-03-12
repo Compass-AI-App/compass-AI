@@ -40,4 +40,10 @@ contextBridge.exposeInMainWorld("compass", {
       ipcRenderer.invoke("credential-delete", provider),
     list: () => ipcRenderer.invoke("credential-list"),
   },
+  oauth: {
+    start: (providerConfig: unknown) =>
+      ipcRenderer.invoke("oauth-start", providerConfig),
+    refresh: (providerConfig: unknown, refreshToken: string) =>
+      ipcRenderer.invoke("oauth-refresh", providerConfig, refreshToken),
+  },
 });

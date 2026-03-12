@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { autoUpdater } from "electron-updater";
 import { startEngine, stopEngine, engineFetch } from "./engine-bridge";
+import { registerOAuthIPC, handleOAuthCallback } from "./oauth";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -35,8 +36,21 @@ function createWindow() {
   });
 }
 
+// Register compass:// protocol for OAuth callbacks
+if (process.defaultApp) {
+  // Dev mode: register with the path to electron
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("compass", process.execPath, [
+      path.resolve(process.argv[1]),
+    ]);
+  }
+} else {
+  app.setAsDefaultProtocolClient("compass");
+}
+
 app.whenReady().then(async () => {
   createWindow();
+  registerOAuthIPC();
 
   try {
     await startEngine();
@@ -48,6 +62,26 @@ app.whenReady().then(async () => {
   if (app.isPackaged) {
     autoUpdater.logger = console;
     autoUpdater.checkForUpdatesAndNotify();
+  }
+});
+
+// Handle compass:// protocol on macOS (open-url event)
+app.on("open-url", (_event, url) => {
+  if (url.startsWith("compass://oauth/callback")) {
+    handleOAuthCallback(url);
+  }
+});
+
+// Handle compass:// protocol on Windows/Linux (second-instance event)
+app.on("second-instance", (_event, commandLine) => {
+  const url = commandLine.find((arg) => arg.startsWith("compass://"));
+  if (url && url.startsWith("compass://oauth/callback")) {
+    handleOAuthCallback(url);
+  }
+  // Focus existing window
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   }
 });
 
