@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Clock, Download, FileText, Lightbulb, Loader2, Sparkles } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, Clock, Download, FileText, Lightbulb, List, Loader2, Sparkles } from "lucide-react";
 import { clsx } from "clsx";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useOpportunitiesStore } from "../stores/opportunities";
 import OpportunityCard from "../components/discover/OpportunityCard";
+import OpportunityChart from "../components/discover/OpportunityChart";
 import SpecView from "../components/discover/SpecView";
 import DocumentView from "../components/discover/DocumentView";
 
@@ -48,6 +49,7 @@ export default function DiscoverPage() {
     }
   }, [workspacePath, opportunities]);
 
+  const [view, setView] = useState<"list" | "chart">("list");
   const [updatingStakeholder, setUpdatingStakeholder] = useState(false);
   const [activeUpdate, setActiveUpdate] = useState<{ title: string; markdown: string } | null>(null);
 
@@ -114,6 +116,30 @@ export default function DiscoverPage() {
       <div className="flex items-center gap-3 mb-6">
         <Lightbulb className="w-6 h-6 text-compass-accent" />
         <h1 className="text-2xl font-semibold text-compass-text">Discover</h1>
+        {opportunities.length > 0 && (
+          <div className="flex items-center gap-1 bg-compass-card border border-compass-border rounded-lg p-0.5 ml-auto">
+            <button
+              onClick={() => setView("list")}
+              className={clsx(
+                "p-1.5 rounded-md transition-colors",
+                view === "list" ? "bg-white/10 text-compass-text" : "text-compass-muted hover:text-compass-text"
+              )}
+              title="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setView("chart")}
+              className={clsx(
+                "p-1.5 rounded-md transition-colors",
+                view === "chart" ? "bg-white/10 text-compass-text" : "text-compass-muted hover:text-compass-text"
+              )}
+              title="Chart view"
+            >
+              <BarChart3 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hero + action */}
@@ -192,7 +218,7 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* Opportunity list */}
+      {/* Opportunity list / chart */}
       {loading ? (
         <div className="text-center py-12 text-compass-muted">
           Reconciling sources and synthesizing opportunities...
@@ -201,6 +227,8 @@ export default function DiscoverPage() {
         <div className="text-center py-12 text-compass-muted">
           No opportunities yet. Click Discover to analyze your evidence.
         </div>
+      ) : view === "chart" ? (
+        <OpportunityChart opportunities={opportunities} />
       ) : (
         <div className="space-y-3">
           {opportunities.map((opp) => (
