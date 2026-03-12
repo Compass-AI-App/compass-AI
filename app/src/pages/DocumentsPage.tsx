@@ -15,6 +15,7 @@ import {
 } from "../stores/documents";
 import DocumentEditor from "../components/editor/DocumentEditor";
 import ExportMenu from "../components/editor/ExportMenu";
+import ShareButton from "../components/editor/ShareButton";
 
 const DOC_TYPES = [
   { value: "brief", label: "Product Brief" },
@@ -265,6 +266,11 @@ function DocumentEditView({
           >
             {doc.doc_type}
           </span>
+          <ShareButton
+            title={title}
+            docType={doc.doc_type}
+            markdown={contentMarkdown}
+          />
           <ExportMenu title={title} markdown={contentMarkdown} />
           <button
             onClick={handleSave}
