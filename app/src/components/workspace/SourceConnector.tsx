@@ -35,6 +35,7 @@ const SOURCE_DEFS: SourceDef[] = [
     bgColor: "bg-compass-docs/10",
     description: "Strategy docs, PRDs, roadmaps",
     picker: "directory",
+    supportsLive: true,
   },
   {
     type: "analytics",
@@ -64,6 +65,12 @@ const SOURCE_DEFS: SourceDef[] = [
     picker: "file",
   },
 ];
+
+/** Maps source type to the engine connector type when in live API mode. */
+const LIVE_SOURCE_TYPE: Record<string, string> = {
+  code: "github",
+  docs: "google_docs",
+};
 
 export default function SourceConnector() {
   const workspacePath = useWorkspaceStore((s) => s.workspacePath);
@@ -155,7 +162,20 @@ export default function SourceConnector() {
               <ConnectorModeToggle
                 sourceType={def.type}
                 mode={modes[def.type] || "file"}
-                onModeChange={(m) => setModes((prev) => ({ ...prev, [def.type]: m }))}
+                onModeChange={async (m) => {
+                  setModes((prev) => ({ ...prev, [def.type]: m }));
+                  // Update engine source type when switching modes
+                  if (workspacePath) {
+                    const source = sources.find((s) => s.type === def.type);
+                    const engineType = m === "live" ? (LIVE_SOURCE_TYPE[def.type] || def.type) : def.type;
+                    await window.compass.engine.call("/connect", {
+                      workspace_path: workspacePath,
+                      source_type: engineType,
+                      name: def.label,
+                      path: source?.path || "",
+                    });
+                  }
+                }}
               />
             )}
           </div>

@@ -2,6 +2,22 @@ import { app, BrowserWindow, ipcMain, dialog, safeStorage } from "electron";
 import path from "path";
 import fs from "fs";
 import { autoUpdater } from "electron-updater";
+
+// Load .env file before any provider config is read
+const envPath = path.join(__dirname, "..", ".env");
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, "utf-8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx > 0) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+}
+
 import { startEngine, stopEngine, engineFetch } from "./engine-bridge";
 import { registerOAuthIPC, handleOAuthCallback } from "./oauth";
 import { getProvider, getAllProviders } from "./oauth-providers";

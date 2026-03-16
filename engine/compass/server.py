@@ -1132,7 +1132,6 @@ def discover_stream(req: WorkspaceRequest):
 # ---------- Document CRUD endpoints ----------
 
 from compass.documents import create_document, get_document, list_documents, delete_document, save_document
-from compass.models.documents import StoredDocument
 
 
 class DocumentSaveRequest(BaseModel):

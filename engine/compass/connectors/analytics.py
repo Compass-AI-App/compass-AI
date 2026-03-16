@@ -13,7 +13,6 @@ import csv
 import json
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 
 from compass.connectors.base import Connector

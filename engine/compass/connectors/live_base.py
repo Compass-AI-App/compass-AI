@@ -7,7 +7,6 @@ mode as fallback — live API mode activates when credentials are available.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from abc import abstractmethod
 

@@ -36,6 +36,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
     token_url: "https://oauth2.googleapis.com/token",
     client_id: clientId("google"),
+    client_secret: process.env.COMPASS_GOOGLE_CLIENT_SECRET || "",
     scopes: [
       "https://www.googleapis.com/auth/drive.readonly",
       "https://www.googleapis.com/auth/documents.readonly",

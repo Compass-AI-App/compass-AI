@@ -7,6 +7,8 @@ import { useCredentialsStore } from "../../stores/credentials";
 const SOURCE_TO_PROVIDER: Record<string, string> = {
   code: "github",
   github: "github",
+  docs: "google",
+  google_docs: "google",
   jira: "atlassian",
   confluence: "atlassian",
   slack: "slack",
@@ -18,6 +20,7 @@ const SOURCE_TO_PROVIDER: Record<string, string> = {
 /** Human-readable provider names. */
 const PROVIDER_NAMES: Record<string, string> = {
   github: "GitHub",
+  google: "Google",
   atlassian: "Atlassian",
   slack: "Slack",
   linear: "Linear",

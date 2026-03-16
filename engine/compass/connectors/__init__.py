@@ -3,6 +3,7 @@
 from compass.connectors.base import Connector
 from compass.connectors.github_connector import GitHubConnector
 from compass.connectors.docs import DocsConnector
+from compass.connectors.google_docs_connector import GoogleDocsConnector
 from compass.connectors.analytics import AnalyticsConnector
 from compass.connectors.interviews import InterviewConnector
 from compass.connectors.support import SupportConnector
@@ -17,7 +18,8 @@ CONNECTORS: dict[str, type[Connector]] = {
     "github": GitHubConnector,
     "code": GitHubConnector,
     "docs": DocsConnector,
-    "google_docs": DocsConnector,
+    "google_docs": GoogleDocsConnector,
+    "google_drive": GoogleDocsConnector,
     "analytics": AnalyticsConnector,
     "data": AnalyticsConnector,
     "interviews": InterviewConnector,
@@ -43,6 +45,7 @@ __all__ = [
     "Connector",
     "GitHubConnector",
     "DocsConnector",
+    "GoogleDocsConnector",
     "AnalyticsConnector",
     "InterviewConnector",
     "SupportConnector",
