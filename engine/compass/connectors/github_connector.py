@@ -139,7 +139,7 @@ class GitHubConnector(LiveConnector):
             for issue in issues:
                 if issue.get("pull_request"):
                     continue  # Skip PRs (handled below)
-                labels = ", ".join(l.get("name", "") for l in issue.get("labels", []))
+                labels = ", ".join(lb.get("name", "") for lb in issue.get("labels", []))
                 body = (issue.get("body") or "")[:5000]
                 evidence.append(Evidence(
                     source_type=SourceType.CODE,
