@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from threading import Event
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -231,7 +232,12 @@ def test_import_api_authentication_and_selected_source_contract(tmp_path, engine
         assert "selection" not in result
 
 
-def test_deadline_rejects_a_late_reader_without_replacing_previous_evidence(setup):
+def test_deadline_rejects_a_late_reader_without_replacing_previous_evidence(setup, monkeypatch):
+    from compass.engine import import_jobs
+
+    clock = [1000.0]
+    # Advance only the import clock after the reader starts; polling retains real time.
+    monkeypatch.setattr(import_jobs, "time", SimpleNamespace(time=lambda: clock[0], monotonic=time.monotonic))
     root, sources, repo, manager, release = setup
     started = Event()
     before = repo.read()
@@ -242,7 +248,7 @@ def test_deadline_rejects_a_late_reader_without_replacing_previous_evidence(setu
     manager.reader = reader
     job = manager.start(root, [sources[0].id], "deadline", timeout_seconds=0.04)
     assert started.wait(2)
-    time.sleep(0.06)
+    clock[0] += 0.06
     assert manager.get(root, job["id"])["cancel_requested"]
     release.set()
     assert finished(manager, root, job["id"])["state"] == "timed_out"
