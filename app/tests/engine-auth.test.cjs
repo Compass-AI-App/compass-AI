@@ -19,6 +19,7 @@ function fixture() {
     return process;
   };
   const mockRequire = (name) => {
+    if(name==="./engine-maintenance")return require("../dist-electron/engine-maintenance.js");
     if (name === "electron") return {
       app: { isPackaged: false },
       BrowserWindow: { getAllWindows: () => [] },

@@ -24,6 +24,8 @@ class InvalidDocumentPath(ValueError):
 def _docs_dir(workspace_path: Path) -> Path:
     """Get the documents directory for a workspace."""
     root = workspace_path.resolve()
+    from compass.workspace_purge import check_available
+    check_available(root)
     d = (root / ".compass" / "documents").resolve()
     if not d.is_relative_to(root):
         raise InvalidDocumentPath("Document storage must stay inside the workspace")

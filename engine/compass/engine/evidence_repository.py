@@ -32,6 +32,9 @@ class EvidenceRepository:
     def __init__(self, directory: Path | None = None):
         self._lock = RLock()
         if directory:
+            from compass.workspace_purge import check_available
+            if directory.name == "knowledge" and directory.parent.name == ".compass":
+                check_available(directory.parent.parent)
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._db = sqlite3.connect(
             str(directory / self.FILE) if directory else ":memory:",

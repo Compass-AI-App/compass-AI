@@ -1,3 +1,4 @@
+import WorkspaceDeletion from "./WorkspaceDeletion";
 import WorkspaceRecovery from "./WorkspaceRecovery";
 import {useState} from "react";
 import {useWorkspaceStore} from "../../stores/workspace";
@@ -42,6 +43,7 @@ export default function WorkspacePicker({ onSelect, onCreateNew }: Props) {
                 className="flex items-center gap-3 p-3 rounded-xl bg-compass-card border border-compass-border hover:border-compass-accent/30 transition-colors group"
               >
                 <button
+                  disabled={ws.deletion_pending}
                   onClick={() => onSelect(ws)}
                   className="flex-1 flex items-center gap-3 text-left min-w-0"
                 >
@@ -54,7 +56,9 @@ export default function WorkspacePicker({ onSelect, onCreateNew }: Props) {
                     </div>
                   </div>
                 </button>
+                {ws.deletion_pending&&<WorkspaceDeletion workspace={ws.id} pending/>}
                 <button
+                  disabled={ws.deletion_pending}
                   onClick={async () => {try {await removeWorkspace(ws.id);if(useWorkspaceStore.getState().workspacePath===ws.id)useWorkspaceStore.getState().clearWorkspace();}catch{setPickerError("This workspace registration could not be removed.");}}}
                   className="opacity-0 group-hover:opacity-100 text-compass-muted hover:text-red-400 transition-all"
                   title="Remove"

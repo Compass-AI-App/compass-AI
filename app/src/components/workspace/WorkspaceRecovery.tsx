@@ -25,7 +25,7 @@ export default function WorkspaceRecovery({workspace,onRestored}:{workspace:stri
  }
  return <section aria-label="Workspace backup and restore" className="border-t border-compass-border pt-6 mt-8 space-y-3 text-sm">
   <h2 className="text-lg font-medium">Backup and restore</h2>
-  <p className="text-compass-muted">Backups include saved task history, imported evidence versions and older saved documents. They contain source text and metadata. Keep the file private. Maximum backup size: 250 MB.</p>
+  <p className="text-compass-muted">Backups include saved task history, imported evidence versions, older saved documents, and legacy conversation, discovery and feedback files. They contain source text and metadata. Keep the file private. Maximum backup size: 250 MB.</p>
   <p className="text-compass-muted">Credentials, source connection paths, native approvals, vector caches and separate output/export files are excluded. A restore creates a new workspace folder; select a backup file, then its parent folder. Reconnect sources before importing again. Unfinished jobs are not replayed.</p>
   <div className="flex flex-wrap gap-3">
    {workspace&&<button disabled={!!busy} className="border border-compass-border rounded px-3 py-2 disabled:opacity-50" onClick={()=>void backup()}>Back up workspace</button>}

@@ -185,3 +185,44 @@ test('restore cancellation, busy engine and out-of-parent responses grant no wor
  const access=new WorkspaceAccess(f.file,f.pick,async endpoint=>endpoint==='/connections/readiness'?{status:'ok',busy:false}:{status:'ok',workspace_path:path.join(f.root,'outside'),name:'Other'});
  await assert.rejects(access.restore(),/could not be registered/);assert.equal(access.list().workspaces.length,0);
 });
+
+test('cancelled native deletion does not touch the engine, approvals or files',async t=>{
+ const f=fixture(t),{folderPath,record}=await f.create();const before=f.calls.length;
+ let ran=false;assert.deepEqual(await f.access.purge(record.id,async()=>false,async()=>{ran=true;}),{status:'cancelled'});
+ assert.equal(f.calls.length,before);assert.equal(ran,false);assert.ok(fs.existsSync(path.join(folderPath,'.compass','compass.yaml')));
+ await assert.rejects(f.access.purge(folderPath,async()=>true,async()=>{ran=true;}),/picker/);assert.equal(ran,false);
+});
+test('successful native deletion sends only registered root identity and clears source approvals',async t=>{
+ const f=fixture(t),{folderPath,record}=await f.create();let request;
+ const result=await f.access.purge(record.id,async(name,pending)=>{assert.equal(name,'Product');assert.equal(pending,false);return true;},async body=>{request=body;return {status:'deleted',entries:4,bytes:100};});
+ assert.equal(result.status,'deleted');assert.equal(request.workspace_path,folderPath);assert.equal(request.inode,fs.statSync(folderPath).ino);assert.deepEqual(request.config.sources,[]);
+ assert.equal(JSON.stringify(result).includes(folderPath),false);assert.deepEqual(JSON.parse(fs.readFileSync(f.file)).workspaces[0].sources,[]);
+});
+test('interrupted deletion blocks normal workspace access while allowing explicit resume',async t=>{
+ const f=fixture(t),{folderPath,record}=await f.create();fs.writeFileSync(path.join(folderPath,'.compass','deletion.json'),'fictional pending marker');
+ assert.equal(f.access.list().workspaces[0].deletion_pending,true);
+ await assert.rejects(f.access.request('/tasks/list',{workspace_path:record.id}),/Resume deletion/);
+ let resumed=false;await f.access.purge(record.id,async(_name,pending)=>pending,async()=>{resumed=true;fs.unlinkSync(path.join(folderPath,'.compass','deletion.json'));return {status:'deleted'};});
+ assert.equal(resumed,true);assert.equal(f.access.list().workspaces[0].deletion_pending,false);
+});
+
+test('pending deletion cannot lose its resume control through registration removal',async t=>{
+ const f=fixture(t),{folderPath,record}=await f.create();fs.writeFileSync(path.join(folderPath,'.compass','deletion.json'),'pending');
+ await assert.rejects(f.access.forget(record.id),/Resume data deletion/);assert.equal(f.access.list().workspaces.length,1);
+});
+
+test('a dangling deletion marker cannot bypass the pending-data fence',async t=>{
+ const f=fixture(t),{folderPath,record}=await f.create();fs.symlinkSync(path.join(f.root,'missing-marker'),path.join(folderPath,'.compass','deletion.json'));
+ assert.equal(f.access.list().workspaces[0].deletion_pending,true);
+ await assert.rejects(f.access.request('/tasks/list',{workspace_path:record.id}),/Resume deletion/);
+});
+
+test('a source connection queued before deletion cannot reconnect into the cleared workspace',async t=>{
+ const f=fixture(t),{record}=await f.create();const source=f.folder('source');fs.writeFileSync(path.join(source,'strategy.md'),'Original source');f.choices.push(source);
+ const selection=await f.access.choose('source','directory');let release,started;const entered=new Promise(resolve=>started=resolve);
+ const deleting=f.access.purge(record.id,async()=>{started();return new Promise(resolve=>release=()=>resolve(true));},async()=>({status:'deleted'}));
+ await entered;
+ const connecting=f.access.request('/connect',{workspace_path:record.id,source_type:'docs',name:'Source',path:selection.id});
+ release();await deleting;await assert.rejects(connecting,/Workspace data changed/);
+ assert.equal(f.calls.filter(call=>call.endpoint==='/connect').length,0);
+});

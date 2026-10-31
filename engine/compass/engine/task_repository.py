@@ -22,6 +22,8 @@ class TaskNotFound(ValueError):
 class TaskRepository:
     def __init__(self, workspace: Path):
         root = workspace.resolve()
+        from compass.workspace_purge import check_available
+        check_available(root)
         directory = root / ".compass"
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         if not directory.resolve().is_relative_to(root):
