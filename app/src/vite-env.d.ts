@@ -96,6 +96,9 @@ interface NativeAI {
   list(): Promise<NativeAIConnection[]>;
   signIn(provider:string,id?:string): Promise<NativeAIConnection[]>;
   cancel(): Promise<boolean>;
+  legacyStatus(): Promise<{browserKey:boolean;cloudToken:boolean;nativeRecords:number|null;savedClaude:boolean;nativeFile:boolean}>;
+  migrateLegacyKey(provider:string): Promise<NativeAIConnection[]>;
+  clearLegacyCredentials(): Promise<{status:"cleared"|"cancelled"}>;
   importSavedClaude(): Promise<NativeAIConnection[]>;
   saveKey(provider:string,key:string): Promise<NativeAIConnection[]>;
   models(id:string): Promise<Array<{id:string;label:string}>>;

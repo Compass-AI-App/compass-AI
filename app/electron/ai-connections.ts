@@ -14,7 +14,7 @@ export class AIConnections {
   private selection: Promise<unknown> = Promise.resolve();
   private broker: InferenceBroker;
   private jobs = new Map<string,{binding:string;token:string;jobId:string}>();
-  constructor(private vault: AIVault, private openBrowser: (url: string) => Promise<unknown>, private engine: (endpoint: string, body?: unknown) => Promise<any>, private fetchJSON: JSONFetch = requestJSON, private hfClientId = "", private revoke: (url:string,init:RequestInit) => Promise<boolean> = revokeSession, inferenceFetch:typeof fetch=fetch) { this.broker=new InferenceBroker(inferenceFetch); }
+  constructor(private vault: AIVault, private openBrowser: (url: string) => Promise<unknown>, private engine: (endpoint: string, body?: unknown) => Promise<any>, private fetchJSON: JSONFetch = requestJSON, private hfClientId = "", private revoke: (url:string,init:RequestInit) => Promise<boolean> = revokeSession, inferenceFetch:typeof fetch=fetch, private removeLegacy:(record:AIConnection)=>Promise<void>=async()=>{}) { this.broker=new InferenceBroker(inferenceFetch); }
   status() {
     const data = this.vault.read();
     const active = data.connections.find(item => item.id === data.active);
@@ -58,7 +58,17 @@ export class AIConnections {
       throw cause;
     } finally { if(this.pending===controller) this.pending=undefined; }
   }
-  async saveKey(providerValue: unknown, value: unknown) {
+  saveKey(providerValue: unknown, value: unknown) {
+    return this.serial(()=>this.saveManualKey(providerValue,value));
+  }
+  migrateKey(provider:unknown,value:unknown,verify:()=>Promise<void>,consume:()=>Promise<void>){
+    return this.serial(async()=>{
+      await this.saveManualKey(provider,value,verify);
+      try{await consume();}catch{throw new Error("The key was saved securely, but its older copy could not be removed. Retry migration or remove older credentials explicitly.");}
+      return this.list();
+    });
+  }
+  private async saveManualKey(providerValue: unknown, value: unknown,verify?:()=>Promise<void>) {
     const provider = validProvider(providerValue);
     if (provider === "chatgpt" || typeof value !== "string" || !value.trim() || value.length > 8192 || /[\r\n]/.test(value)) throw new Error("Enter a valid provider API key.");
     this.vault.requireEncryption();
@@ -66,7 +76,9 @@ export class AIConnections {
     if (provider === "anthropic") await this.fetchJSON("https://api.anthropic.com/v1/models",{headers:{"x-api-key":key,"anthropic-version":"2023-06-01"}});
     else if (provider === "openrouter") await this.fetchJSON("https://openrouter.ai/api/v1/key",{headers:{Authorization:`Bearer ${key}`}});
     else await this.fetchJSON("https://huggingface.co/api/whoami-v2",{headers:{Authorization:`Bearer ${key}`}});
+    await verify?.();
     const data = this.vault.read();
+    if(data.connections.some(item=>item.provider===provider&&item.accessToken===key&&item.status==="connected"))return this.list();
     if (data.connections.length >= 32) throw new Error("Connection limit reached.");
     data.connections.push({id:uuid(),revision:1,provider,label:provider === "anthropic" ? "Claude API" : provider === "openrouter" ? "OpenRouter API" : "Hugging Face token",accessToken:key,scopes:[],inferenceEnabled:true,status:"connected",model:"",servingProvider:""});
     this.vault.write(data); return this.list();
@@ -218,14 +230,20 @@ export class AIConnections {
   disconnect(id: string) {
     return this.serial(async () => {
       validId(id);
-      const activeData = this.vault.read();
-      if(activeData.active===id) await this.idle();
-      const refreshing = this.refreshes.get(id);
-      if(refreshing) await refreshing.catch(() => {});
-      const record = this.record(id);
-      this.vault.update(id,record.revision,current => { current.accessToken=""; current.refreshToken=undefined; current.idToken=undefined; current.expiresAt=undefined; current.status="signed_out"; current.inferenceEnabled=false; });
-      const latest=this.vault.read();
-      if(latest.active===id) { latest.active=null; this.vault.write(latest); await this.engine("/connections/clear",{}); }
+      let data = this.vault.read();
+      let record=this.record(id);
+      const matches=(item:AIConnection)=>item.id===id||!!record.accessToken&&item.provider===record.provider&&item.accessToken===record.accessToken;
+      if(data.connections.some(item=>matches(item)&&data.active===item.id))await this.idle();
+      for(const item of data.connections.filter(matches))await this.refreshes.get(item.id)?.catch(()=>{});
+      record=this.record(id);
+      await this.removeLegacy(record);
+      data=this.vault.read();
+      const targets=data.connections.filter(matches);
+      for(const current of targets){current.accessToken="";current.refreshToken=undefined;current.idToken=undefined;current.expiresAt=undefined;current.status="signed_out";current.inferenceEnabled=false;current.revision++;}
+      const wasActive=targets.some(item=>data.active===item.id);
+      if(wasActive)data.active=null;
+      this.vault.write(data);
+      if(wasActive)await this.engine("/connections/clear",{});
       let remoteRevoked = false;
       if(record.provider==="chatgpt" && record.refreshToken && record.clientId) {
         try {

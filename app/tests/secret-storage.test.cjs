@@ -37,7 +37,8 @@ function fixture(t, { platform = "darwin", available = true, backend = "gnome_li
       },
     },
   };
-  vm.runInNewContext(mainCode, {
+  const exported={};
+  vm.runInNewContext(mainCode+"\nexports.storageAvailable=hasSecureSecretStorage;", {
     require: (name) => {
       if (name === "electron") return electron;
       if (name === "electron-updater") return { autoUpdater: {} };
@@ -46,10 +47,11 @@ function fixture(t, { platform = "darwin", available = true, backend = "gnome_li
       if (name === "./release-policy") return require("../dist-electron/release-policy.js");
       if (name === "./ai-connections") return {engineOperation:()=>"other"};
       if (name === "./engine-bridge") return {engineFetch:async(endpoint)=>{engineCalls.push(endpoint);return {status:"ok"};}};
+      if (name === "./legacy-credentials") return require("../dist-electron/legacy-credentials.js");
       if (name.startsWith("./")) return {};
       return require(name);
     },
-    exports: {},
+    exports: exported,
     __dirname: path.join(directory, "dist-electron"),
     process: { platform, argv: [], env: {} },
     Buffer,
@@ -58,57 +60,22 @@ function fixture(t, { platform = "darwin", available = true, backend = "gnome_li
   return {
     call: (name, ...args) => handlers.get(name)({}, ...args),
     file: path.join(directory, "secrets.enc"),
-    state, engineCalls,
+    state, engineCalls, storageAvailable:exported.storageAvailable,
   };
 }
 
-test("unavailable OS encryption rejects both credential writes without creating a file", async (t) => {
-  const vault = fixture(t, { available: false });
-  await assert.rejects(vault.call("secrets-store", "key", "fictional-secret"), /Secure credential storage is unavailable/);
-  await assert.rejects(vault.call("credential-store", "example", { access_token: "fictional-token" }), /Secure credential storage is unavailable/);
-  assert.equal(fs.existsSync(vault.file), false);
+test("production secure-storage policy rejects unavailable OS storage and Linux basic_text",t=>{
+  assert.equal(fixture(t,{available:false}).storageAvailable(),false);
+  assert.equal(fixture(t,{platform:"linux",backend:"basic_text"}).storageAvailable(),false);
+  assert.equal(fixture(t,{platform:"linux",backend:"gnome_libsecret"}).storageAvailable(),true);
+  assert.equal(fixture(t).storageAvailable(),true);
 });
 
-test("encrypted credentials roundtrip and remain inaccessible when encryption becomes unavailable", async (t) => {
-  const vault = fixture(t);
-  await vault.call("secrets-store", "key", "fictional-secret");
-  await vault.call("credential-store", "example", { access_token: "fictional-token" });
-  const stored = fs.readFileSync(vault.file, "utf8");
-  assert.equal(stored.includes("fictional-secret"), false);
-  assert.equal(stored.includes("fictional-token"), false);
-  assert.equal(await vault.call("secrets-load", "key"), "fictional-secret");
-  assert.equal((await vault.call("credential-load", "example")).access_token, "fictional-token");
-  vault.state.available = false;
-  assert.equal(await vault.call("secrets-load", "key"), null);
-  assert.equal(await vault.call("credential-load", "example"), null);
-  assert.equal((await vault.call("credential-list")).length, 0);
-  assert.equal(fs.readFileSync(vault.file, "utf8"), stored);
-});
-
-test("Linux basic_text is rejected even when Electron reports encryption available", async (t) => {
-  const vault = fixture(t, { platform: "linux", backend: "basic_text" });
-  await assert.rejects(vault.call("secrets-store", "key", "fictional-secret"), /Secure credential storage is unavailable/);
-  await assert.rejects(vault.call("credential-store", "example", { access_token: "fictional-token" }), /Secure credential storage is unavailable/);
-  assert.equal(fs.existsSync(vault.file), false);
-});
-
-test("Linux native secret backend supports the encrypted storage path", async (t) => {
-  const vault = fixture(t, { platform: "linux" });
-  await vault.call("secrets-store", "key", "fictional-secret");
-  assert.equal(await vault.call("secrets-load", "key"), "fictional-secret");
-});
-
-test("legacy plaintext is never returned, and explicit deletion still works", async (t) => {
-  const vault = fixture(t, { available: false });
-  fs.writeFileSync(vault.file, JSON.stringify({ key: "old-plaintext", "credential:example": "old-plaintext" }));
-  assert.equal(await vault.call("secrets-load", "key"), null);
-  assert.equal(await vault.call("credential-load", "example"), null);
-  vault.state.available = true;
-  assert.equal(await vault.call("secrets-load", "key"), null);
-  assert.equal(await vault.call("credential-load", "example"), null);
-  await vault.call("secrets-delete", "key");
-  await vault.call("credential-delete", "example");
-  assert.deepEqual(JSON.parse(fs.readFileSync(vault.file, "utf8")), {});
+test("retired generic credential handlers are not registered",t=>{
+  const vault=fixture(t);
+  for(const name of ["secrets-store","secrets-load","secrets-delete","credential-store","credential-load","credential-delete","credential-list"]){
+    assert.throws(()=>vault.call(name,"key","value"),/not a function/);
+  }
 });
 
 test("main process rejects deferred engine calls before invoking its transport", async t => {

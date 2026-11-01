@@ -25,6 +25,7 @@ import { requireReleaseEndpoint } from "./release-policy";
 import { WorkspaceAccess } from "./workspace-access";
 import { saveTaskExport } from "./task-export";
 import { LegacyData,captureLegacyScript,removeLegacyScript } from "./legacy-data";
+import {LegacyCredentials,captureCredentialScript,removeCredentialScript} from "./legacy-credentials";
 import { AIVault } from "./ai-vault";
 import { AIConnections, engineOperation } from "./ai-connections";
 
@@ -74,7 +75,7 @@ app.whenReady().then(async () => {
     available:hasSecureSecretStorage,
     encrypt:value => safeStorage.encryptString(value),
     decrypt:value => safeStorage.decryptString(value),
-  }), url => shell.openExternal(url), (endpoint,body) => engineFetch(endpoint,body ? {body} : undefined), undefined, process.env.COMPASS_HF_CLIENT_ID || "");
+  }), url => shell.openExternal(url), (endpoint,body) => engineFetch(endpoint,body ? {body} : undefined), undefined, process.env.COMPASS_HF_CLIENT_ID || "", undefined, undefined, record=>legacyCredentials.removeMatching(record));
   workspaceAccess = new WorkspaceAccess(path.join(app.getPath("userData"),"workspaces.json"),async (kind,purpose)=>{
     const result=await dialog.showOpenDialog({title:purpose==="backup"?"Choose a Compass backup file":purpose==="restore-parent"?"Choose a parent folder for the new restored workspace":undefined,filters:purpose==="backup"?[{name:"Compass backup",extensions:["json"]}]:undefined,properties:kind==="directory"?["openDirectory"]:["openFile"]});
     return result.canceled?null:result.filePaths[0];
@@ -181,136 +182,19 @@ function hasSecureSecretStorage(): boolean {
     (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
 }
 
-handleMainIPC("secrets-store", async (_event, key: string, value: string) => {
-  if (!hasSecureSecretStorage()) {
-    throw new Error("Secure credential storage is unavailable. Unlock your OS keychain and try again.");
-  }
-  const store = loadSecretsFile();
-  store[key] = safeStorage.encryptString(value).toString("base64");
-  fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
-  return true;
-});
-
-handleMainIPC("secrets-load", async (_event, key: string) => {
-  if(aiConnections && key === "anthropic-api-key") return null;
-  const store = loadSecretsFile();
-  const encrypted = store[key];
-  if (!encrypted) return null;
-  if (!hasSecureSecretStorage()) return null;
-  try {
-    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
-  } catch {
-    return null; // Corrupted or re-keyed — user will need to re-enter
-  }
-});
-
-handleMainIPC("secrets-delete", async (_event, key: string) => {
-  const store = loadSecretsFile();
-  delete store[key];
-  fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
-  return true;
-});
-
-function loadSecretsFile(): Record<string, string> {
-  try {
-    return JSON.parse(fs.readFileSync(secretsPath, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-
-// --- Credential Vault ---
-// Structured credential storage for OAuth tokens and API keys.
-// Credentials are stored as encrypted JSON blobs keyed by "credential:{provider}".
-// This is separate from the flat secrets store to support structured credential objects.
-
-const CREDENTIAL_PREFIX = "credential:";
-
-function encryptValue(value: string): string {
-  if (!hasSecureSecretStorage()) {
-    throw new Error("Secure credential storage is unavailable. Unlock your OS keychain and try again.");
-  }
-  return safeStorage.encryptString(value).toString("base64");
-}
-
-function decryptValue(encrypted: string): string | null {
-  if (!hasSecureSecretStorage()) return null;
-  try {
-    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
-  } catch {
-    return null;
-  }
-}
-
-handleMainIPC(
-  "credential-store",
-  async (_event, provider: string, credential: unknown) => {
-    const store = loadSecretsFile();
-    const key = CREDENTIAL_PREFIX + provider;
-    store[key] = encryptValue(JSON.stringify(credential));
-    fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
-    return true;
-  }
-);
-
-handleMainIPC("credential-load", async (_event, provider: string) => {
-  const store = loadSecretsFile();
-  const key = CREDENTIAL_PREFIX + provider;
-  const encrypted = store[key];
-  if (!encrypted) return null;
-  const decrypted = decryptValue(encrypted);
-  if (!decrypted) return null;
-  try {
-    return JSON.parse(decrypted);
-  } catch {
-    return null;
-  }
-});
-
-handleMainIPC("credential-delete", async (_event, provider: string) => {
-  const store = loadSecretsFile();
-  const key = CREDENTIAL_PREFIX + provider;
-  delete store[key];
-  fs.writeFileSync(secretsPath, JSON.stringify(store), "utf-8");
-  return true;
-});
-
-handleMainIPC("credential-list", async () => {
-  const store = loadSecretsFile();
-  const credentials: Array<{
-    provider: string;
-    method: string;
-    status: string;
-    scopes?: string[];
-    expires_at?: number;
-    metadata?: Record<string, string>;
-  }> = [];
-
-  for (const key of Object.keys(store)) {
-    if (!key.startsWith(CREDENTIAL_PREFIX)) continue;
-    const provider = key.slice(CREDENTIAL_PREFIX.length);
-    const decrypted = decryptValue(store[key]);
-    if (!decrypted) continue;
-
-    try {
-      const cred = JSON.parse(decrypted);
-      const now = Date.now();
-      const isExpired = cred.expires_at && cred.expires_at < now;
-      credentials.push({
-        provider,
-        method: cred.method || "oauth",
-        status: isExpired ? "expired" : "connected",
-        scopes: cred.scopes,
-        expires_at: cred.expires_at,
-        metadata: cred.metadata,
-      });
-    } catch {
-      // Skip corrupted entries
-    }
-  }
-
-  return credentials;
-});
+const legacyCredentials=new LegacyCredentials(secretsPath,async()=>{
+  if(!mainWindow)throw new Error("The app window is unavailable.");
+  return mainWindow.webContents.executeJavaScript(captureCredentialScript);
+},async records=>{
+  if(!mainWindow)throw new Error("The app window is unavailable.");
+  return mainWindow.webContents.executeJavaScript(removeCredentialScript(records));
+},value=>{if(!hasSecureSecretStorage())throw new Error("Secure storage is unavailable.");return safeStorage.decryptString(value);});
+handleMainIPC("ai-legacy-status",()=>legacyCredentials.status());
+handleMainIPC("ai-legacy-migrate",(_event,provider:unknown)=>legacyCredentials.migrateBrowser(nativeAI(),provider));
+handleMainIPC("ai-legacy-clear",()=>legacyCredentials.clear(async()=>{
+  const result=await dialog.showMessageBox({type:"warning",title:"Remove older credentials",message:"Remove older credential records from this app profile?",detail:"Removes the older browser API key, retired Compass cloud login token, and the entire older native secrets file, including source connector credentials or unreadable records. Current AI connections, workspace data, and other browser settings remain. Other app profiles and provider-side access remain. This removes records, not secure disk erasure.",buttons:["Cancel","Remove older credentials"],defaultId:0,cancelId:0,noLink:true});
+  return result.response===1;
+}));
 
 // --- OAuth Provider Registry IPC ---
 
@@ -330,12 +214,7 @@ handleMainIPC("ai-disconnect", (_event, id: string) => nativeAI().disconnect(id)
 
 handleMainIPC("ai-forget", (_event, id: string) => nativeAI().forget(id));
 
-handleMainIPC("ai-import-saved-claude", async () => {
-  const encrypted=loadSecretsFile()["anthropic-api-key"];
-  const key=encrypted ? decryptValue(encrypted) : null;
-  if(!key) throw new Error("No saved Claude key is available. Connect with your current API key.");
-  return nativeAI().saveKey("anthropic",key);
-});
+handleMainIPC("ai-import-saved-claude",()=>legacyCredentials.importClaude(nativeAI()));
 
 function nativeWorkspaces():WorkspaceAccess {
   if(!workspaceAccess)throw new Error("Workspace access is still starting.");
