@@ -19,7 +19,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { startEngine, stopEngine, engineFetch } from "./engine-bridge";
+import { startEngine, stopEngine, engineFetch, assertEngineAvailable, purgeWorkspaceData } from "./engine-bridge";
 import { handleMainIPC, trustMainWindow } from "./ipc";
 import { requireReleaseEndpoint } from "./release-policy";
 import { WorkspaceAccess } from "./workspace-access";
@@ -159,6 +159,7 @@ handleMainIPC("engine-health", async () => {
 // IPC: Restart engine after crash
 handleMainIPC("engine-restart", async () => {
   try {
+    assertEngineAvailable();
     aiConnections?.resetInference();
     stopEngine();
     await startEngine();
@@ -354,7 +355,15 @@ handleMainIPC("task-export",async(_event,request)=>saveTaskExport(nativeWorkspac
 
 
 handleMainIPC("workspaces-backup",async(_event,id)=>nativeWorkspaces().backup(id,async name=>{
-  const result=await dialog.showSaveDialog({defaultPath:name,filters:[{name:"Compass backup",extensions:["json"]}],message:"Back up saved task history, imported evidence and older saved documents. Contains source text and metadata. Credentials, source paths, source approvals, vector caches and separate output/export files are excluded."});
+  const result=await dialog.showSaveDialog({defaultPath:name,filters:[{name:"Compass backup",extensions:["json"]}],message:"Back up saved task history, imported evidence, older saved documents and legacy conversation/discovery/feedback files. Contains source text and metadata. Credentials, source paths, source approvals, vector caches and separate output/export files are excluded."});
   return result.canceled?null:result.filePath||null;
 }));
 handleMainIPC("workspaces-restore",()=>nativeWorkspaces().restore());
+
+
+handleMainIPC("workspaces-purge",async(_event,id)=>{
+    return await nativeWorkspaces().purge(id,async(name,pending,folder)=>{
+      const result=await dialog.showMessageBox({type:"warning",title:pending?"Resume Compass data deletion":"Delete Compass data",message:`${pending?"Resume deleting":"Delete"} Compass data for ${name}?`,detail:`Workspace folder: ${folder}\n\nRemoves imported evidence and all versions, saved tasks/reviews and job history, migration backups, cached indexes, older saved documents, conversations and feedback. Source connections and approvals are cleared. Product details, original source files, separate exports/backups, older browser copies, .compass/output and other workspace files remain. Provider accounts remain connected; sign out in Settings separately. This removes managed files, not secure disk erasure.`,buttons:["Cancel",pending?"Resume deletion":"Delete Compass data"],defaultId:0,cancelId:0,noLink:true});
+      return result.response===1;
+    },request=>purgeWorkspaceData(request,()=>!aiConnections?.inferenceBusy(),async()=>{await aiConnections?.restoreFresh().catch(()=>{});}));
+});

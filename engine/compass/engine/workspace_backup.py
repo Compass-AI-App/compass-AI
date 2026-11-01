@@ -21,9 +21,11 @@ from compass.engine.task_service import source_key
 from compass.models.documents import StoredDocument
 from compass.models.sources import Evidence
 from compass.models.tasks import ConnectionBinding, Task, now
+from compass.workspace_purge import LEGACY_DATA
 
 MAX_BYTES = 250_000_000
-FORMAT = "compass-workspace-backup-v1"
+FORMAT = "compass-workspace-backup-v2"
+READ_FORMATS = {"compass-workspace-backup-v1", FORMAT}
 JOB_COLUMNS = (
     "id",
     "task_id",
@@ -101,7 +103,7 @@ def product_data(config):
 
 
 def validate(payload):
-    if not isinstance(payload, dict) or set(payload) != {
+    if not isinstance(payload, dict) or set(payload) - {"legacy_data"} != {
         "created_at",
         "product",
         "snapshots",
@@ -376,6 +378,20 @@ def validate(payload):
         if document.id != row["id"]:
             raise ValueError("Legacy document identity mismatch")
         documents.add(row["id"])
+    legacy = payload.get("legacy_data", [])
+    if not isinstance(legacy, list) or len(legacy) > len(LEGACY_DATA):
+        raise ValueError("Invalid legacy workspace data")
+    names = set()
+    for item in legacy:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"name", "content"}
+            or item["name"] not in LEGACY_DATA
+            or item["name"] in names
+            or not isinstance(item["content"], str)
+        ):
+            raise ValueError("Invalid legacy workspace file")
+        names.add(item["name"])
     return config
 
 
@@ -439,6 +455,11 @@ def create_backup(root: Path, destination: Path):
         if docs.exists():
             for file in sorted(docs.glob("*.json")):
                 payload["documents"].append({"id": file.stem, "payload": regular_read(file)})
+        payload["legacy_data"] = []
+        for name in LEGACY_DATA:
+            file = root / ".compass" / name
+            if os.path.lexists(file):
+                payload["legacy_data"].append({"name": name, "content": regular_read(file)})
         validate(payload)
         checksum = hashlib.sha256(encode(payload).encode()).hexdigest()
         archive = {"format": FORMAT, "sha256": checksum, "payload": payload}
@@ -468,6 +489,7 @@ def create_backup(root: Path, destination: Path):
             "revisions": len(payload["revisions"]),
             "snapshots": len(payload["snapshots"]),
             "documents": len(payload["documents"]),
+            "legacy_files": len(payload.get("legacy_data", [])),
             "bytes": count,
             "sha256": checksum,
         }
@@ -482,7 +504,7 @@ def read_backup(file: Path):
     if (
         not isinstance(archive, dict)
         or set(archive) != {"format", "sha256", "payload"}
-        or archive["format"] != FORMAT
+        or archive["format"] not in READ_FORMATS
         or hashlib.sha256(encode(archive["payload"]).encode()).hexdigest() != archive["sha256"]
     ):
         raise ValueError("Backup format or checksum is invalid; existing work was kept")
@@ -565,6 +587,14 @@ def restore_backup(file: Path, parent: Path):
                 output.write(row["payload"])
                 output.flush()
                 os.fsync(output.fileno())
+        for item in payload.get("legacy_data", []):
+            descriptor = os.open(
+                storage / item["name"], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+            )
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                output.write(item["content"])
+                output.flush()
+                os.fsync(output.fileno())
         save_config(config, stage)
         # Read back the new stores before publishing the complete workspace folder.
         with repository._connect() as db:
@@ -593,6 +623,12 @@ def restore_backup(file: Path, parent: Path):
                 raise ValueError("Restored import history failed readback")
         finally:
             check._db.close()
+        for item in payload.get("legacy_data", []):
+            if regular_read(storage / item["name"]) != item["content"]:
+                raise ValueError("Restored legacy workspace file failed readback")
+        for row in payload["documents"]:
+            if regular_read(documents / f"{row['id']}.json") != row["payload"]:
+                raise ValueError("Restored legacy document failed readback")
         destination = parent / f"Compass restored {uuid4().hex}"
         if destination.exists():
             raise ValueError("Choose another restore destination")

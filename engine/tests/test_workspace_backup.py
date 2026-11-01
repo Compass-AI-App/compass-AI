@@ -470,3 +470,38 @@ def test_partial_import_coverage_is_preserved_in_backup_and_restore(saved, tmp_p
             "SELECT state,payload FROM import_jobs"
         ).fetchone()
     assert state == "partial" and json.loads(raw)["results"][0]["coverage"] == coverage
+
+
+def test_deletable_legacy_files_are_backed_up_and_restored_without_arbitrary_file_authority(
+    saved, tmp_path
+):
+    from compass.workspace_purge import LEGACY_DATA
+
+    root, _, _, _, destination = saved
+    for name in LEGACY_DATA:
+        (root / ".compass" / name).write_text("Earlier conversation or discovery text")
+    receipt = create_backup(root, destination)
+    assert receipt["legacy_files"] == len(LEGACY_DATA)
+    parent = tmp_path / "restore-legacy"
+    parent.mkdir()
+    restored = Path(restore_backup(destination, parent)["workspace_path"])
+    for name in LEGACY_DATA:
+        assert (
+            restored / ".compass" / name
+        ).read_text() == "Earlier conversation or discovery text"
+    rewrite(destination, lambda data: data["legacy_data"][0].update(name="../outside"))
+    with pytest.raises(ValueError, match="legacy workspace file"):
+        restore_backup(destination, parent)
+
+
+def test_previous_version_one_backup_without_legacy_extension_remains_readable(saved, tmp_path):
+    create_backup(saved[0], saved[4])
+    archive = json.loads(saved[4].read_text())
+    archive["format"] = "compass-workspace-backup-v1"
+    archive["payload"].pop("legacy_data")
+    archive["sha256"] = hashlib.sha256(encode(archive["payload"]).encode()).hexdigest()
+    saved[4].write_text(encode(archive))
+    parent = tmp_path / "restore-v1"
+    parent.mkdir()
+    restored = Path(restore_backup(saved[4], parent)["workspace_path"])
+    assert TaskService(restored).tasks.read(saved[2].id).brief.decision == "Human direction"

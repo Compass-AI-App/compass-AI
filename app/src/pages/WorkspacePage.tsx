@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect,useState } from "react";
 import { Home } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useWorkspaceManager } from "../stores/workspaceManager";
+import WorkspaceDeletion from "../components/workspace/WorkspaceDeletion";
 import WorkspaceRecovery from "../components/workspace/WorkspaceRecovery";
 import SourceConnector from "../components/workspace/SourceConnector";
 import IngestButton from "../components/workspace/IngestButton";
@@ -17,6 +18,8 @@ export default function WorkspacePage() {
   const evidenceCount = useWorkspaceStore((s) => s.evidenceCount);
   const evidenceSummary = useWorkspaceStore((s) => s.evidenceSummary);
   const { loaded, loadWorkspaces, openWorkspace } = useWorkspaceManager();
+  const [deletedWorkspace]=useState(()=>sessionStorage.getItem("compass-workspace-deleted"));
+  const currentWorkspace=useWorkspaceManager(state=>state.workspaces.find(item=>item.id===workspacePath));
   const navigate = useNavigate();
   const location=useLocation();
 
@@ -36,7 +39,7 @@ export default function WorkspacePage() {
 
   // Load workspace state from engine and auto-ingest if needed
   useEffect(() => {
-    if (!workspacePath) return;
+    if (!workspacePath || currentWorkspace?.deletion_pending) return;
     let cancelled=false;
     (async () => {
       try {
@@ -73,8 +76,9 @@ export default function WorkspacePage() {
       }
     })();
     return ()=>{cancelled=true;};
-  }, [workspacePath]);
+  }, [workspacePath,currentWorkspace?.deletion_pending]);
 
+  if(workspacePath&&currentWorkspace?.deletion_pending)return <div className="p-8 max-w-4xl"><h1 className="text-2xl font-semibold">{productName}</h1><WorkspaceDeletion workspace={workspacePath} pending/><WorkspaceRecovery workspace={null}/></div>;
   if (!workspacePath) {
     return (
       <WorkspacePicker
@@ -97,6 +101,7 @@ export default function WorkspacePage() {
 
       </div>
 
+      {deletedWorkspace===workspacePath&&<p role="status" className="mb-6 text-sm text-neutral-300">Managed Compass data was deleted. Original sources and separately retained copies remain.</p>}
       {location.state?.restoredBackup&&<p role="status" className="mb-6 text-sm text-neutral-300">Backup restored into a new workspace. Source connections were not restored; approve sources before importing again.</p>}
       <div className="grid grid-cols-3 gap-3 mb-8">
         <StatusCard label="Sources" value={sources.length} />
@@ -122,6 +127,7 @@ export default function WorkspacePage() {
 
       <LegacyArtifacts workspacePath={workspacePath} />
       <WorkspaceRecovery key={workspacePath} workspace={workspacePath} />
+      <WorkspaceDeletion key={`delete-${workspacePath}`} workspace={workspacePath}/>
     </div>
   );
 }

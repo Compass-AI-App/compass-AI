@@ -12,6 +12,7 @@
     "build:linux": "npm run build && electron-builder --linux",
     "build:all": "npm run build && electron-builder --mac --win --linux",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "test:maintenance": "tsc -p tsconfig.electron.json && node --test tests/engine-maintenance.test.cjs",
     "test:task-export": "tsc -p tsconfig.electron.json && node --test tests/task-export.test.cjs",
     "test:inference": "tsc -p tsconfig.electron.json && node --test tests/inference-broker.test.cjs",
     "test:connections": "tsc -p tsconfig.electron.json && node --test tests/ai-connections.test.cjs",

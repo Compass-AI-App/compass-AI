@@ -25,12 +25,17 @@ function unchanged(record:Identity) {
   const current=identity(record.path);
   if(current.path!==record.path || current.device!==record.device || current.inode!==record.inode || current.directory!==record.directory)throw new Error("The selected folder or file moved or changed identity. Select it again.");
 }
+function deletionPending(root:string){
+  try{fs.lstatSync(path.join(root,".compass","deletion.json"));return true;}
+  catch(cause){if((cause as NodeJS.ErrnoException).code==="ENOENT")return false;throw new Error("Workspace deletion state could not be checked.");}
+}
 function publicWorkspace(record:Workspace) {
   // `path` is a compatibility field for existing views: it is an opaque ID,
   // never a filesystem path. Only the native bridge resolves it.
-  return {id:record.id,path:record.id,name:record.name,description:record.description,created_at:record.created_at,last_opened:record.last_opened};
+  return {id:record.id,path:record.id,name:record.name,description:record.description,created_at:record.created_at,last_opened:record.last_opened,deletion_pending:deletionPending(record.path)};
 }
-function privateStorage(root:string) {
+function privateStorage(root:string,allowPending=false) {
+  if(!allowPending&&deletionPending(root))throw new Error("Compass data deletion is incomplete. Resume deletion from Workspace before opening saved data.");
   const dir=path.join(root,".compass");
   if(fs.existsSync(dir) && (!fs.lstatSync(dir).isDirectory() || fs.lstatSync(dir).isSymbolicLink()))throw new Error("Workspace storage cannot be a symbolic link.");
   const entries=["compass.yaml","tasks.sqlite3","tasks.sqlite3-wal","tasks.sqlite3-shm","jobs.lock","knowledge","knowledge/vectors","knowledge/vectors/chroma.sqlite3","knowledge/vectors/chroma.sqlite3-wal","knowledge/vectors/chroma.sqlite3-shm","knowledge/evidence_store.json","knowledge/evidence.sqlite3","knowledge/evidence.sqlite3-wal","knowledge/evidence.sqlite3-shm","documents","output"];
@@ -41,6 +46,7 @@ function privateStorage(root:string) {
   }
 }
 export class WorkspaceAccess {
+  private dataEpoch=new Map<string,number>();
   private selections=new Map<string,{identity:Identity;expires:number;purpose:"workspace"|"source"}>();
   private tail:Promise<unknown>=Promise.resolve();
   constructor(private file:string,private pick:(kind:"directory"|"file",purpose?:"backup"|"restore-parent")=>Promise<string|null>,private engine:Engine) {}
@@ -71,11 +77,11 @@ export class WorkspaceAccess {
     } finally {if(fd!==undefined)fs.closeSync(fd);if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
   }
   list(){const data=this.read();return {workspaces:data.workspaces.map(publicWorkspace),activeWorkspaceId:data.active};}
-  private record(id:unknown):Workspace {
+  private record(id:unknown,allowPending=false):Workspace {
     if(typeof id!=="string" || !/^ws_[a-f0-9]{32}$/.test(id))throw new Error("Open this workspace through the native folder picker first.");
     const record=this.read().workspaces.find(item=>item.id===id);
     if(!record)throw new Error("This workspace is not registered. Open it through the folder picker.");
-    unchanged(record);privateStorage(record.path);
+    unchanged(record);privateStorage(record.path,allowPending);
     if(!fs.existsSync(path.join(record.path,".compass","compass.yaml")) || !fs.statSync(path.join(record.path,".compass","compass.yaml")).isFile())throw new Error("Workspace configuration is missing. Reopen its original folder.");
     return record;
   }
@@ -128,6 +134,24 @@ export class WorkspaceAccess {
     if(result.status!=="ok")throw new Error("This workspace could not be opened. Its saved files have been kept.");
     unchanged(selected);return this.register(selected,safeText(result.name,200),safeText(result.description||"",4000));
   });}
+  purge(id:unknown,confirm:(name:string,pending:boolean,folder:string)=>Promise<boolean>,run:(request:unknown)=>Promise<any>){return this.serial(async()=>{
+    const record=this.record(id,true);const pending=deletionPending(record.path);
+    if(!await confirm(record.name,pending,record.path))return {status:"cancelled" as const};
+    this.record(id,true);
+    let config={name:record.name,description:record.description,model:"",sources:[]};
+    let protectedPaths=record.sources.map(source=>source.path);
+    if(!pending){
+      const info=await this.engine("/workspace/info",{workspace_path:record.path});
+      if(info.status!=="ok"||!Array.isArray(info.sources))throw new Error("Workspace details could not be checked. No data was removed.");
+      config={name:safeText(info.name,200),description:safeText(info.description||"",4000),model:safeText(info.model||"",256),sources:[]};
+      protectedPaths.push(...info.sources.filter((source:any)=>typeof source.path==="string").map((source:any)=>source.path));
+    }
+    const result=await run({workspace_path:record.path,device:record.device,inode:record.inode,config,protected_paths:[...new Set(protectedPaths)]});
+    if(result.status!=="deleted")throw new Error("Deletion did not finish. Resume it from Workspace.");
+    this.dataEpoch.set(record.id,(this.dataEpoch.get(record.id)||0)+1);
+    const data=this.read();const current=data.workspaces.find(item=>item.id===record.id)!;current.sources=[];this.write(data);
+    return {status:"deleted" as const,entries:result.entries,bytes:result.bytes};
+  });}
   backup(id:unknown,choose:(name:string)=>Promise<string|null>){return this.serial(async()=>{
     const record=this.record(id);
     const destination=await choose("compass-workspace.compass-backup.json");
@@ -136,7 +160,7 @@ export class WorkspaceAccess {
     this.record(id);
     const result=await this.engine("/workspace/backup",{workspace_path:record.path,backup_path:destination});
     if(result.status!=="ok")throw new Error(typeof result.detail==="string"?result.detail:"Workspace backup failed. Existing work was kept.");
-    return {status:"saved" as const,tasks:result.tasks,snapshots:result.snapshots,documents:result.documents,bytes:result.bytes};
+    return {status:"saved" as const,tasks:result.tasks,snapshots:result.snapshots,documents:result.documents,legacy_files:result.legacy_files||0,bytes:result.bytes};
   });}
   restore(){return this.serial(async()=>{
     this.read();
@@ -157,15 +181,17 @@ export class WorkspaceAccess {
     return this.register(selected,safeText(result.name,200),safeText(result.description||"",4000));
   });}
   activate(id:unknown){return this.serial(async()=>{const record=this.record(id);const data=this.read();data.active=record.id;data.workspaces.find(item=>item.id===id)!.last_opened=new Date().toISOString();this.write(data);return publicWorkspace(record);});}
-  forget(id:unknown){return this.serial(async()=>{const readiness=await this.engine("/connections/readiness");if(readiness.status!=="ok" || readiness.busy!==false)throw new Error("Finish or cancel generation before removing a workspace registration.");const data=this.read();if(typeof id!=="string" || !data.workspaces.some(item=>item.id===id))throw new Error("Workspace not found.");data.workspaces=data.workspaces.filter(item=>item.id!==id);if(data.active===id)data.active=null;this.write(data);return this.list();});}
+  forget(id:unknown){return this.serial(async()=>{if(typeof id==="string"&&this.read().workspaces.some(item=>item.id===id&&deletionPending(item.path)))throw new Error("Resume data deletion before removing this workspace registration.");const readiness=await this.engine("/connections/readiness");if(readiness.status!=="ok" || readiness.busy!==false)throw new Error("Finish or cancel generation before removing a workspace registration.");const data=this.read();if(typeof id!=="string" || !data.workspaces.some(item=>item.id===id))throw new Error("Workspace not found.");data.workspaces=data.workspaces.filter(item=>item.id!==id);if(data.active===id)data.active=null;this.write(data);return this.list();});}
   async request(endpoint:string,body:unknown,invoke:Engine=this.engine) {
     if(endpoint==="/usage")return invoke(endpoint);
     if(!body || typeof body!=="object" || Array.isArray(body))throw new Error("Choose a registered workspace first.");
     const input=body as Record<string,unknown>;
     const record=this.record(input.workspace_path);
+    const epoch=this.dataEpoch.get(record.id)||0;
     const request={...input,workspace_path:record.path};
     if(endpoint==="/init")throw new Error("Use the native workspace creation flow.");
     if(endpoint==="/connect")return this.serial(async()=>{
+      if((this.dataEpoch.get(record.id)||0)!==epoch)throw new Error("Workspace data changed. Choose the source again before connecting it.");
       const selected=this.selected(input.path,"source");
       const type=safeText(input.source_type,40),name=safeText(input.name,200);
       if(!supportedSources.has(type) || !name || input.url || input.options || input.auth)throw new Error("Choose a supported local source with the native picker.");

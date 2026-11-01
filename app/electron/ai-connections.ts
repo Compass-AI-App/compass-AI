@@ -199,8 +199,10 @@ export class AIConnections {
     }
     return result;
   }
+  inferenceBusy(){return this.broker.busy();}
   resetInference() { this.broker.reset();this.jobs.clear(); }
   async close() { await this.broker.close(); }
+  restoreFresh(){return this.serial(async()=>{this.resetInference();const data=this.vault.read();if(data.managed&&data.active)await this.credential(data.active);});}
   async restore() {
     this.resetInference();
     const data = this.vault.read(); if(!data.managed) { await this.engine("/connections/clear",{}); return; }

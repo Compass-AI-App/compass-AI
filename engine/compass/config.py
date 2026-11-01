@@ -83,6 +83,8 @@ class ProductConfig(BaseModel):
 def get_compass_dir(base: Path | None = None) -> Path:
     """Get the .compass directory, creating if needed."""
     base = base or Path.cwd()
+    from compass.workspace_purge import check_available
+    check_available(base)
     compass_dir = base / COMPASS_DIR
     compass_dir.mkdir(parents=True, exist_ok=True)
     (compass_dir / OUTPUT_DIR).mkdir(parents=True, exist_ok=True)

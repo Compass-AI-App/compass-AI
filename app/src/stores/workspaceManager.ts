@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export interface WorkspaceEntry {
+  deletion_pending?:boolean;
   id: string;
   name: string;
   description: string;

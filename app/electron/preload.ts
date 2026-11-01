@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("compass", {
   workspaces: {
+    purge:(id:string)=>ipcRenderer.invoke("workspaces-purge",id),
     backup:(id:string)=>ipcRenderer.invoke("workspaces-backup",id),
     restore:()=>ipcRenderer.invoke("workspaces-restore"),
     list:()=>ipcRenderer.invoke("workspaces-list"),

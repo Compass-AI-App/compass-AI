@@ -14,6 +14,10 @@ import { existsSync, mkdirSync } from "fs";
 import path from "path";
 import net from "net";
 import crypto from "crypto";
+import {EngineMaintenance} from "./engine-maintenance";
+const maintenance=new EngineMaintenance();
+let stoppedChild:ChildProcess|null=null;
+let launchPython="";
 
 let engineProcess: ChildProcess | null = null;
 let enginePort: number = 0;
@@ -170,6 +174,7 @@ export function engineEnvironment(source:NodeJS.ProcessEnv):NodeJS.ProcessEnv {
 }
 
 export async function startEngine(): Promise<number> {
+  if(stoppedChild)await waitForExit(stoppedChild);
   if (engineProcess && enginePort) return enginePort;
 
   intentionalStop = false;
@@ -177,6 +182,7 @@ export async function startEngine(): Promise<number> {
   notifyRenderer("engine-status", { state: "starting", message: "Starting engine..." });
 
   const python = findPython();
+  launchPython=python;
   enginePort = await findFreePort();
   engineToken = crypto.randomBytes(32).toString("hex");
 
@@ -201,11 +207,11 @@ export async function startEngine(): Promise<number> {
     console.error(`[engine] ${data.toString().trim()}`);
   });
 
+  const launchedChild=engineProcess;
   engineProcess.on("exit", (code) => {
     console.log(`[engine-bridge] Engine exited with code ${code}`);
-    engineProcess = null;
-    enginePort = 0;
-    engineToken = "";
+    if(engineProcess===launchedChild){engineProcess = null;enginePort = 0;engineToken = "";}
+    if(stoppedChild===launchedChild)stoppedChild=null;
 
     if (!intentionalStop) {
       console.error("[engine-bridge] Engine crashed unexpectedly");
@@ -239,6 +245,7 @@ export function stopEngine(): void {
   engineToken = "";
   if (engineProcess) {
     console.log("[engine-bridge] Stopping engine");
+    stoppedChild=engineProcess;
     engineProcess.kill("SIGTERM");
     engineProcess = null;
     enginePort = 0;
@@ -253,6 +260,11 @@ export async function engineRequest(
   endpoint: string,
   options?: { method?: string; body?: unknown }
 ): Promise<Response> {
+  maintenance.assertAvailable();
+  return rawEngineRequest(endpoint,options);
+}
+
+async function rawEngineRequest(endpoint:string,options?:{method?:string;body?:unknown}):Promise<Response>{
   if (!enginePort || !engineToken) throw new Error("Engine not started");
 
   const origin = `http://127.0.0.1:${enginePort}`;
@@ -275,6 +287,34 @@ export async function engineFetch(
   endpoint: string,
   options?: { method?: string; body?: unknown }
 ): Promise<unknown> {
-  const res = await engineRequest(endpoint, options);
-  return res.json();
+  return maintenance.request(async()=>{const res = await rawEngineRequest(endpoint, options);return res.json();});
+}
+
+
+function waitForExit(child:ChildProcess):Promise<void>{
+  if(child.exitCode!==null&&child.exitCode!==undefined || child.signalCode)return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{child.kill("SIGKILL");},3_000);
+    const deadline=setTimeout(()=>{cleanup();reject(new Error("The engine did not stop. Workspace files were kept."));},8_000);
+    const cleanup=()=>{clearTimeout(timer);clearTimeout(deadline);child.removeListener("exit",done);};
+    const done=()=>{cleanup();resolve();};child.once("exit",done);
+  });
+}
+export function assertEngineAvailable(){maintenance.assertAvailable();}
+export async function purgeWorkspaceData(request:any,nativeIdle:()=>boolean,onRestart:()=>Promise<unknown>=async()=>{}):Promise<any>{
+  return maintenance.run(async()=>{
+    const response=await rawEngineRequest("/connections/readiness");const result=await response.json();
+    return result.status==="ok"&&result.busy===false&&nativeIdle();
+  },async()=>{const child=engineProcess;if(child){stopEngine();await waitForExit(child);}},async()=>{
+    return new Promise((resolve,reject)=>{
+      const worker=spawn(launchPython||findPython(),["-m","compass.workspace_purge"],{cwd:getEngineDir(),stdio:["pipe","pipe","ignore"],env:engineEnvironment(process.env)});
+      let output="";const timer=setTimeout(()=>{worker.kill("SIGTERM");},60_000);
+      const hardTimer=setTimeout(()=>worker.kill("SIGKILL"),63_000);
+      worker.stdin?.on("error",()=>{});
+      worker.stdout?.on("data",chunk=>{output+=chunk.toString();if(output.length>16_000)worker.kill("SIGTERM");});
+      worker.once("error",()=>{clearTimeout(timer);clearTimeout(hardTimer);reject(new Error("The deletion worker could not start. Workspace files were kept."));});
+      worker.once("exit",()=>{clearTimeout(timer);clearTimeout(hardTimer);let result:any;try{result=JSON.parse(output);}catch{reject(new Error("The deletion worker stopped before completion. Resume deletion from Workspace."));return;}if(result.status!=="deleted"){reject(new Error(typeof result.message==="string"?result.message:"Deletion did not finish. Resume it from Workspace."));return;}resolve(result);});
+      worker.stdin?.end(JSON.stringify(request));
+    });
+  },async()=>{await startEngine();await onRestart();});
 }
