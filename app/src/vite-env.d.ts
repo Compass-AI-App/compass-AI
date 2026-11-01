@@ -123,6 +123,7 @@ interface NativeWorkspaces {
 
 interface Window {
   compass: {
+    legacy:{status():Promise<{records:number;bytes:number;malformed:number;groups:Record<string,number>}>;export():Promise<{status:"saved"|"cancelled"}>;clear():Promise<{status:"cleared"|"cancelled"}>};
     ai: NativeAI;
     workspaces:NativeWorkspaces;
     engine: CompassEngine;

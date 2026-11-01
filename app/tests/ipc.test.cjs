@@ -126,7 +126,8 @@ test("release preload exposes task and native AI capabilities without legacy pri
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../dist-electron/preload.js"),"utf8"),{
     require:()=>({contextBridge:{exposeInMainWorld:(_name,value)=>{api=value;}},ipcRenderer:{invoke:()=>{},on:()=>{},removeListener:()=>{}}}),exports:{},
   });
-  assert.deepEqual(Object.keys(api).sort(),["ai","app","engine","workspaces"]);
+  assert.deepEqual(Object.keys(api).sort(),["ai","app","engine","legacy","workspaces"]);
+  assert.deepEqual(Object.keys(api.legacy).sort(),["clear","export","status"]);
   assert.equal(api.engine.stream,undefined);
   assert.equal(api.app.selectDirectory,undefined);
   assert.equal(api.app.selectFile,undefined);

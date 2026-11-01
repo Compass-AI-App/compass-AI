@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld("compass", {
       return () => ipcRenderer.removeListener("engine-status", handler);
     },
   },
+  legacy: {status:()=>ipcRenderer.invoke("legacy-data-status"),export:()=>ipcRenderer.invoke("legacy-data-export"),clear:()=>ipcRenderer.invoke("legacy-data-clear")},
   app: {
     exportTask: (request: {workspace_path:string;task_id:string;expected_revision:number;kind:"brief"|"handoff"}) => ipcRenderer.invoke("task-export",request),
     saveFile: (defaultName: string, content: string) =>
