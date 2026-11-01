@@ -88,7 +88,7 @@ jobs:
           node-version: "24"
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11.18"
+          python-version: "3.11"
       - run: python ../engine/build_desktop_runtime.py --target mac-${{ matrix.arch }}
       - run: npm ci --registry=https://registry.npmjs.org/
       - run: npm run build
