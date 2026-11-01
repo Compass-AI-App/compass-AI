@@ -64,3 +64,35 @@ jobs:
           node-version: "24"
       - run: npm ci
       - run: npm run build
+
+  offline-engine:
+    name: Offline macOS engine (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            appDir: mac-arm64
+          - runner: macos-15-intel
+            arch: x64
+            appDir: mac
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - run: python ../engine/build_desktop_runtime.py --target mac-${{ matrix.arch }}
+      - run: npm ci --registry=https://registry.npmjs.org/
+      - run: npm run build
+      - run: npx electron-builder --mac --dir --${{ matrix.arch }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - run: node scripts/smoke-engine-runtime.cjs release/${{ matrix.appDir }}/Compass.app/Contents/Resources

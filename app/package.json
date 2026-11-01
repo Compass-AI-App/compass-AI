@@ -72,20 +72,6 @@
     ],
     "extraResources": [
       {
-        "from": "../engine",
-        "to": "engine",
-        "filter": [
-          "compass/**/*",
-          "pyproject.toml",
-          "README.md",
-          "!**/__pycache__",
-          "!**/*.pyc",
-          "!.venv/**/*",
-          "!tests/**/*",
-          "!*.egg-info/**/*"
-        ]
-      },
-      {
         "from": "../demo",
         "to": "demo",
         "filter": [
@@ -98,7 +84,8 @@
         {
           "target": "dmg",
           "arch": [
-            "universal"
+            "arm64",
+            "x64"
           ]
         }
       ],
@@ -108,7 +95,13 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "minimumSystemVersion": "13.0"
+      "minimumSystemVersion": "13.0",
+      "extraResources": [
+        {
+          "from": "../.runtime/mac-${arch}",
+          "to": "engine-runtime"
+        }
+      ]
     },
     "win": {
       "target": [
@@ -156,7 +149,9 @@
       "provider": "github",
       "owner": "ahmedkhaledmohamed",
       "repo": "compass-AI"
-    }
+    },
+    "beforePack": "./scripts/verify-engine-runtime.cjs",
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
   },
   "engines": {
     "node": ">=22.12.0 <23 || >=24 <25"

@@ -43,3 +43,6 @@ app/out/
 # Claude Code
 .claude/
 LOOP_PROMPT.md
+
+# Build-time standalone desktop engine runtimes
+.runtime/
