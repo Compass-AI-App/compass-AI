@@ -127,6 +127,8 @@ test("release preload exposes task and native AI capabilities without legacy pri
     require:()=>({contextBridge:{exposeInMainWorld:(_name,value)=>{api=value;}},ipcRenderer:{invoke:()=>{},on:()=>{},removeListener:()=>{}}}),exports:{},
   });
   assert.deepEqual(Object.keys(api).sort(),["ai","app","engine","legacy","workspaces"]);
+  for(const method of ["legacyStatus","migrateLegacyKey","clearLegacyCredentials"])assert.equal(typeof api.ai[method],"function");
+  assert.equal(api.secrets,undefined);assert.equal(api.credentials,undefined);
   assert.deepEqual(Object.keys(api.legacy).sort(),["clear","export","status"]);
   assert.equal(api.engine.stream,undefined);
   assert.equal(api.app.selectDirectory,undefined);
