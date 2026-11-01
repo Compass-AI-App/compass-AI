@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Settings, BarChart3, RotateCcw } from "lucide-react";
 import { useSettingsStore } from "../stores/settings";
 import { resetOnboarding } from "./OnboardingPage";
+import LegacyAppData from "../components/settings/LegacyAppData";
 import AIConnections from "../components/settings/AIConnections";
 
 export default function SettingsPage() {
@@ -38,6 +39,7 @@ export default function SettingsPage() {
       </Section>
 
       <AIConnections />
+      <LegacyAppData/>
 
       {/* Reset onboarding */}
       <Section icon={RotateCcw} title="Onboarding">

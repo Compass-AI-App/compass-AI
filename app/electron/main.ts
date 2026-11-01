@@ -24,6 +24,7 @@ import { handleMainIPC, trustMainWindow } from "./ipc";
 import { requireReleaseEndpoint } from "./release-policy";
 import { WorkspaceAccess } from "./workspace-access";
 import { saveTaskExport } from "./task-export";
+import { LegacyData,captureLegacyScript,removeLegacyScript } from "./legacy-data";
 import { AIVault } from "./ai-vault";
 import { AIConnections, engineOperation } from "./ai-connections";
 
@@ -367,3 +368,19 @@ handleMainIPC("workspaces-purge",async(_event,id)=>{
       return result.response===1;
     },request=>purgeWorkspaceData(request,()=>!aiConnections?.inferenceBusy(),async()=>{await aiConnections?.restoreFresh().catch(()=>{});}));
 });
+
+
+let legacyService:LegacyData|undefined;
+function legacyData(){
+  if(legacyService)return legacyService;
+  const read=async(script:string)=>{if(!mainWindow||mainWindow.isDestroyed()||mainWindow.webContents.isDestroyed())throw new Error("The app window is unavailable. Reopen Compass.");return mainWindow.webContents.executeJavaScript(script);};
+  legacyService=new LegacyData(()=>read(captureLegacyScript),snapshot=>read(removeLegacyScript(snapshot)));return legacyService;
+}
+handleMainIPC("legacy-data-status",()=>legacyData().status());
+handleMainIPC("legacy-data-export",()=>legacyData().export(async()=>{
+  const result=await dialog.showSaveDialog({defaultPath:"compass-older-artifacts.compass-legacy.json",filters:[{name:"Legacy Compass data",extensions:["json"]}],message:"Save older presentations, prototypes, pinned charts, conversations and feedback from this app profile. Contains sensitive user text; keep the file private. Content is saved as text and is never executed."});
+  return result.canceled?null:result.filePath||null;
+}));
+handleMainIPC("legacy-data-clear",()=>legacyData().clear(async summary=>{
+  const result=await dialog.showMessageBox({type:"warning",title:"Clear older app artifacts",message:`Clear ${summary.records} older storage records across this app profile?`,detail:"These older presentations, prototypes, pinned charts, conversations and feedback cannot reliably be assigned to one workspace. This clears all of those copies in this app profile, including other workspaces. Export them first if you want to keep them. Current workspace files, exports/backups, provider credentials and other settings remain.",buttons:["Cancel","Clear all older app artifacts"],defaultId:0,cancelId:0,noLink:true});return result.response===1;
+}));
