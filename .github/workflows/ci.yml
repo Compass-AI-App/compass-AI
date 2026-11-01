@@ -45,19 +45,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm run test:secrets
-      - run: npm run test:engine-auth
-      - run: npm run test:ipc
-      - run: npm run test:legacy-data
-      - run: npm run test:legacy-credentials
-      - run: npm run test:maintenance
-      - run: npm run test:task-export
-      - run: npm run test:inference
-      - run: npm run test:connections
-      - run: npm run test:workspaces
+      - run: npm run typecheck
+      - run: npm run test:desktop
+      - run: npm audit --audit-level=high --registry=https://registry.npmjs.org/
 
   app-build:
     name: App Build (vite)
@@ -69,6 +61,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - run: npm ci
       - run: npm run build
