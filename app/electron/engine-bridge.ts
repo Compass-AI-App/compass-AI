@@ -4,13 +4,14 @@
  * On app startup: finds Python, picks a free port, spawns the FastAPI server,
  * polls /health until ready. On quit: kills the child process.
  *
- * For packaged builds: bootstraps a managed venv on first launch.
+ * Packaged builds use a preassembled, isolated CPython runtime; no first-launch install.
  * Handles engine crashes with restart capability.
  */
 
 import { app, BrowserWindow } from "electron";
 import { ChildProcess, spawn, execSync } from "child_process";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync } from "fs";
+import {packagedEngine} from "./engine-runtime";
 import path from "path";
 import net from "net";
 import crypto from "crypto";
@@ -18,6 +19,10 @@ import {EngineMaintenance} from "./engine-maintenance";
 const maintenance=new EngineMaintenance();
 let stoppedChild:ChildProcess|null=null;
 let launchPython="";
+let launchFlags:string[]=[];
+let startup:Promise<number>|null=null;
+let startupAbort:AbortController|undefined;
+let launchEpoch=0;
 
 let engineProcess: ChildProcess | null = null;
 let enginePort: number = 0;
@@ -32,52 +37,9 @@ const isPackaged = app.isPackaged;
  */
 function getEngineDir(): string {
   if (isPackaged) {
-    return path.join(process.resourcesPath, "engine");
+    return path.join(process.resourcesPath, "engine-runtime");
   }
   return path.resolve(__dirname, "../../engine");
-}
-
-/** Managed venv location for packaged builds. */
-function getManagedVenvDir(): string {
-  return path.join(app.getPath("userData"), "engine-venv");
-}
-
-/**
- * For packaged builds: ensure a managed venv exists with compass-ai installed.
- * Returns the Python path inside the managed venv.
- */
-function ensureManagedVenv(): string {
-  const venvDir = getManagedVenvDir();
-  const isWin = process.platform === "win32";
-  const venvPython = isWin
-    ? path.join(venvDir, "Scripts", "python.exe")
-    : path.join(venvDir, "bin", "python3");
-
-  if (existsSync(venvPython)) {
-    return venvPython;
-  }
-
-  console.log("[engine-bridge] First launch: creating managed venv...");
-  notifyRenderer("engine-status", { state: "setup", message: "Setting up Python environment..." });
-
-  // Find system Python
-  const systemPython = findSystemPython();
-  console.log(`[engine-bridge] Using system Python: ${systemPython}`);
-
-  mkdirSync(venvDir, { recursive: true });
-  execSync(`"${systemPython}" -m venv "${venvDir}"`, { stdio: "inherit" });
-
-  // Install compass-ai from the bundled engine source
-  const engineDir = getEngineDir();
-  console.log("[engine-bridge] Installing compass-ai into managed venv...");
-  notifyRenderer("engine-status", { state: "setup", message: "Installing dependencies..." });
-  execSync(`"${venvPython}" -m pip install --quiet "${engineDir}"`, {
-    stdio: "inherit",
-    timeout: 120_000,
-  });
-
-  console.log("[engine-bridge] Managed venv ready");
-  return venvPython;
 }
 
 function findSystemPython(): string {
@@ -112,9 +74,9 @@ function findPython(): string {
     }
   }
 
-  // Packaged app: use managed venv (bootstrap if needed)
+  // Packaged app: fail closed when its prebuilt runtime is unavailable.
   if (isPackaged) {
-    return ensureManagedVenv();
+    return packagedEngine(process.resourcesPath,process.platform,process.arch).python;
   }
 
   // Dev fallback: use system Python
@@ -124,7 +86,7 @@ function findPython(): string {
 function findFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
-    server.listen(0, () => {
+    server.listen(0, "127.0.0.1", () => {
       const addr = server.address();
       if (addr && typeof addr === "object") {
         const port = addr.port;
@@ -137,19 +99,15 @@ function findFreePort(): Promise<number> {
   });
 }
 
-async function pollHealth(port: number, timeoutMs = 30_000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/health`, {
-        headers: { Authorization: `Bearer ${engineToken}` },
-      });
-      const data = await res.json();
-      if (data.status === "ready") return true;
-    } catch {
-      // not ready yet
-    }
-    await new Promise((r) => setTimeout(r, 300));
+async function pollHealth(port:number,token:string,signal:AbortSignal,alive:()=>boolean,timeoutMs=30_000):Promise<boolean>{
+  const deadline=Date.now()+timeoutMs;
+  while(Date.now()<deadline&&!signal.aborted&&alive()){
+    try{
+      const response=await fetch(`http://127.0.0.1:${port}/health`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.any([signal,AbortSignal.timeout(Math.max(1,Math.min(1000,deadline-Date.now())))])});
+      const data=await response.json();
+      if(response.ok&&data.status==="ready"&&!signal.aborted&&alive())return true;
+    }catch{/* Startup has one total deadline, including response-body reads. */}
+    if(!signal.aborted&&alive())await new Promise(resolve=>setTimeout(resolve,Math.min(100,Math.max(0,deadline-Date.now()))));
   }
   return false;
 }
@@ -169,78 +127,62 @@ function notifyRenderer(channel: string, data: unknown): void {
 export function engineEnvironment(source:NodeJS.ProcessEnv):NodeJS.ProcessEnv {
   const environment={...source};
   for(const name of Object.keys(environment))if(/(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i.test(name))delete environment[name];
+  if(isPackaged)for(const name of Object.keys(environment))if(name.startsWith("PYTHON")||name==="VIRTUAL_ENV"||name.startsWith("CONDA"))delete environment[name];
   environment.COMPASS_NATIVE_INFERENCE_ONLY="1";
   return environment;
 }
 
-export async function startEngine(): Promise<number> {
-  if(stoppedChild)await waitForExit(stoppedChild);
-  if (engineProcess && enginePort) return enginePort;
-
-  intentionalStop = false;
-
-  notifyRenderer("engine-status", { state: "starting", message: "Starting engine..." });
-
-  const python = findPython();
-  launchPython=python;
-  enginePort = await findFreePort();
-  engineToken = crypto.randomBytes(32).toString("hex");
-
-  console.log(`[engine-bridge] Starting engine: ${python} -m compass.server ${enginePort}`);
-
-  const engineDir = getEngineDir();
-  engineProcess = spawn(python, ["-m", "compass.server", String(enginePort)], {
-    cwd: engineDir,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...engineEnvironment(process.env),
-      COMPASS_ENGINE_PORT: String(enginePort),
-      COMPASS_ENGINE_TOKEN: engineToken,
-    },
-  });
-
-  engineProcess.stdout?.on("data", (data: Buffer) => {
-    console.log(`[engine] ${data.toString().trim()}`);
-  });
-
-  engineProcess.stderr?.on("data", (data: Buffer) => {
-    console.error(`[engine] ${data.toString().trim()}`);
-  });
-
-  const launchedChild=engineProcess;
-  engineProcess.on("exit", (code) => {
-    console.log(`[engine-bridge] Engine exited with code ${code}`);
-    if(engineProcess===launchedChild){engineProcess = null;enginePort = 0;engineToken = "";}
-    if(stoppedChild===launchedChild)stoppedChild=null;
-
-    if (!intentionalStop) {
-      console.error("[engine-bridge] Engine crashed unexpectedly");
-      notifyRenderer("engine-status", {
-        state: "crashed",
-        message: `Engine stopped unexpectedly (exit code ${code}). Click to restart.`,
-      });
-    }
-  });
-
-  const ready = await pollHealth(enginePort);
-  if (!ready) {
-    console.error("[engine-bridge] Engine failed to start within timeout");
-    notifyRenderer("engine-status", {
-      state: "error",
-      message: "Engine failed to start. Check that Python 3.11+ is installed.",
+export function startEngine():Promise<number>{
+  if(startup)return startup;
+  if(engineProcess&&enginePort)return Promise.resolve(enginePort);
+  const operation=launchEngine();startup=operation;
+  const settled=()=>{if(startup===operation)startup=null;};
+  operation.then(settled,settled);return operation;
+}
+async function launchEngine():Promise<number>{
+  const epoch=++launchEpoch,controller=new AbortController();startupAbort=controller;
+  let child:ChildProcess|undefined,exited=false;
+  try{
+    if(stoppedChild)await waitForExit(stoppedChild);
+    if(controller.signal.aborted||epoch!==launchEpoch)throw new Error("Engine startup was cancelled.");
+    intentionalStop=false;
+    notifyRenderer("engine-status",{state:"starting",message:"Starting engine…"});
+    const runtime=isPackaged?packagedEngine(process.resourcesPath,process.platform,process.arch):{python:findPython(),directory:getEngineDir(),flags:["-B"]};
+    const port=await findFreePort(),token=crypto.randomBytes(32).toString("hex");
+    if(controller.signal.aborted||epoch!==launchEpoch)throw new Error("Engine startup was cancelled.");
+    launchPython=runtime.python;launchFlags=runtime.flags;
+    child=spawn(runtime.python,[...runtime.flags,"-m","compass.server",String(port)],{cwd:runtime.directory,stdio:["ignore","pipe","pipe"],env:{...engineEnvironment(process.env),COMPASS_ENGINE_PORT:String(port),COMPASS_ENGINE_TOKEN:token}});
+    const launched=child;
+    engineProcess=child;enginePort=port;engineToken=token;
+    child.stdout?.on("data",(data:Buffer)=>console.log(`[engine] ${data.toString().trim()}`));
+    child.stderr?.on("data",(data:Buffer)=>console.error(`[engine] ${data.toString().trim()}`));
+    child.once("error",()=>{
+      exited=true;controller.abort();
+      if(engineProcess===launched){engineProcess=null;enginePort=0;engineToken="";}
+      if(epoch===launchEpoch)notifyRenderer("engine-status",{state:"error",message:"The Compass engine process could not run. Restart Compass or reinstall this build."});
     });
-  } else {
-    console.log(`[engine-bridge] Engine ready on port ${enginePort}`);
-    notifyRenderer("engine-status", { state: "ready", message: "Engine ready" });
-  }
-
-  // Store port so IPC handlers can use it
-  process.env.COMPASS_ENGINE_PORT = String(enginePort);
-
-  return enginePort;
+    child.once("exit",code=>{
+      exited=true;
+      const current=engineProcess===launched;
+      if(current){engineProcess=null;enginePort=0;engineToken="";}
+      if(stoppedChild===launched)stoppedChild=null;
+      if(current&&!intentionalStop&&epoch===launchEpoch)notifyRenderer("engine-status",{state:"crashed",message:`Engine stopped unexpectedly (exit code ${code}). Restart it to continue.`});
+    });
+    if(!await pollHealth(port,token,controller.signal,()=>!exited&&epoch===launchEpoch))throw new Error("The Compass engine did not become ready. Restart Compass or reinstall this build if the problem continues.");
+    if(epoch!==launchEpoch)throw new Error("Engine startup was cancelled.");
+    process.env.COMPASS_ENGINE_PORT=String(port);
+    notifyRenderer("engine-status",{state:"ready",message:"Engine ready"});
+    return port;
+  }catch(cause){
+    if(child&&!exited){child.kill("SIGTERM");await waitForExit(child);}
+    if(engineProcess===child){engineProcess=null;enginePort=0;engineToken="";}
+    if(epoch===launchEpoch)notifyRenderer("engine-status",{state:"error",message:cause instanceof Error?cause.message:"The engine could not start. Restart Compass."});
+    throw cause;
+  }finally{if(startupAbort===controller)startupAbort=undefined;}
 }
 
 export function stopEngine(): void {
+  launchEpoch++;startupAbort?.abort();startup=null;
   intentionalStop = true;
   engineToken = "";
   if (engineProcess) {
@@ -307,7 +249,7 @@ export async function purgeWorkspaceData(request:any,nativeIdle:()=>boolean,onRe
     return result.status==="ok"&&result.busy===false&&nativeIdle();
   },async()=>{const child=engineProcess;if(child){stopEngine();await waitForExit(child);}},async()=>{
     return new Promise((resolve,reject)=>{
-      const worker=spawn(launchPython||findPython(),["-m","compass.workspace_purge"],{cwd:getEngineDir(),stdio:["pipe","pipe","ignore"],env:engineEnvironment(process.env)});
+      const worker=spawn(launchPython||findPython(),[...launchFlags,"-m","compass.workspace_purge"],{cwd:getEngineDir(),stdio:["pipe","pipe","ignore"],env:engineEnvironment(process.env)});
       let output="";const timer=setTimeout(()=>{worker.kill("SIGTERM");},60_000);
       const hardTimer=setTimeout(()=>worker.kill("SIGKILL"),63_000);
       worker.stdin?.on("error",()=>{});

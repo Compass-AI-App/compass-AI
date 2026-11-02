@@ -5,9 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from threading import RLock
 
-import chromadb
-from chromadb.config import Settings
-
 from compass.engine.evidence_repository import EvidenceRepository
 from compass.models.sources import Evidence, EvidenceStore, SourceType
 
@@ -45,6 +42,11 @@ class KnowledgeGraph:
         Each snapshot has its own collection, so concurrent readers/builders of
         different evidence generations cannot overwrite one another's results.
         """
+        # Desktop task retrieval uses SQLite FTS and needs no embedding model.
+        # Keep the optional legacy vector dependency off the desktop startup path.
+        import chromadb
+        from chromadb.config import Settings
+
         with self._index_lock:
             if self._client is None:
                 settings = Settings(anonymized_telemetry=False)
